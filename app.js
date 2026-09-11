@@ -1,6 +1,12 @@
 (() => {
   const TILE = 24;
   const EXPORT_TILE = 32;
+  const GRID_PRESETS = {
+    "32x32": { w: 32, h: 32 },
+    "48x48": { w: 48, h: 48 },
+    "48x27": { w: 48, h: 27 },
+    "64x36": { w: 64, h: 36 },
+  };
   const LAYER_ORDER = ["background", "middle", "foreground"];
   const LAYER_META = {
     background: { name: "Background", accent: "#5b8def" },
@@ -64,7 +70,8 @@
   };
 
   const state = {
-    gridSize: 32,
+    gridW: 32,
+    gridH: 32,
     showGrid: true,
     zoom: 1,
     activeLayer: "middle",
@@ -96,9 +103,36 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function gridKey(w, h) {
+    return `${w}x${h}`;
+  }
+
+  function parseGridValue(value) {
+    if (value && GRID_PRESETS[value]) return { ...GRID_PRESETS[value] };
+    const asNum = Number(value);
+    if (Number.isFinite(asNum) && asNum > 0) return { w: asNum, h: asNum };
+    const match = String(value || "").match(/^(\d+)\s*x\s*(\d+)$/i);
+    if (match) {
+      const w = Number(match[1]);
+      const h = Number(match[2]);
+      if (w > 0 && h > 0) return { w, h };
+    }
+    return { w: 32, h: 32 };
+  }
+
+  function applyGridDims(w, h) {
+    state.gridW = w;
+    state.gridH = h;
+    const key = gridKey(w, h);
+    if ([...els.gridSize.options].some((opt) => opt.value === key)) {
+      els.gridSize.value = key;
+    }
+  }
+
   function snapshot() {
     return {
-      gridSize: state.gridSize,
+      gridW: state.gridW,
+      gridH: state.gridH,
       layers: clone(state.layers),
     };
   }
@@ -116,10 +150,11 @@
   }
 
   function restore(snap) {
-    state.gridSize = snap.gridSize;
+    const w = snap.gridW ?? snap.gridSize ?? 32;
+    const h = snap.gridH ?? snap.gridSize ?? 32;
+    applyGridDims(w, h);
     state.layers = clone(snap.layers);
     state.selectedIds = state.selectedIds.filter((id) => findItem(id));
-    els.gridSize.value = String(state.gridSize);
     renderAll();
   }
 
@@ -236,24 +271,24 @@
   }
 
   function viewPixels() {
-    return state.gridSize * TILE;
+    return { w: state.gridW * TILE, h: state.gridH * TILE };
   }
 
   function exportPixels() {
-    return state.gridSize * EXPORT_TILE;
+    return { w: state.gridW * EXPORT_TILE, h: state.gridH * EXPORT_TILE };
   }
 
   function sizeReadoutText() {
     const view = viewPixels();
     const image = exportPixels();
-    return `View ${view} x ${view} · Image ${image} x ${image}`;
+    return `View ${view.w} x ${view.h} · Image ${image.w} x ${image.h}`;
   }
 
-  function clampItem(item, grid) {
-    item.w = clamp(item.w, 1, grid);
-    item.h = clamp(item.h, 1, grid);
-    item.x = clamp(item.x, 0, grid - item.w);
-    item.y = clamp(item.y, 0, grid - item.h);
+  function clampItem(item) {
+    item.w = clamp(item.w, 1, state.gridW);
+    item.h = clamp(item.h, 1, state.gridH);
+    item.x = clamp(item.x, 0, state.gridW - item.w);
+    item.y = clamp(item.y, 0, state.gridH - item.h);
   }
 
   function itemRotation(item) {
@@ -288,7 +323,7 @@
       item.y = Math.round(cy - item.h / 2);
     }
     item.rotation = next;
-    clampItem(item, state.gridSize);
+    clampItem(item);
   }
 
   function transformSelected(mutator) {
@@ -297,7 +332,7 @@
     checkpoint();
     for (const rec of recs) {
       mutator(rec.item);
-      clampItem(rec.item, state.gridSize);
+      clampItem(rec.item);
     }
     renderItems();
     renderInspector();
@@ -313,9 +348,9 @@
       const rec = findItem(start.id);
       if (!rec) continue;
       minDx = Math.max(minDx, -start.x);
-      maxDx = Math.min(maxDx, state.gridSize - rec.item.w - start.x);
+      maxDx = Math.min(maxDx, state.gridW - rec.item.w - start.x);
       minDy = Math.max(minDy, -start.y);
-      maxDy = Math.min(maxDy, state.gridSize - rec.item.h - start.y);
+      maxDy = Math.min(maxDy, state.gridH - rec.item.h - start.y);
     }
     if (!Number.isFinite(minDx)) return { dx: 0, dy: 0 };
     return {
@@ -362,14 +397,14 @@
     if (width <= 0 || height <= 0) {
       return { fx: -1, fy: -1, x: -1, y: -1, inside: false };
     }
-    const fx = ((e.clientX - rect.left) / width) * state.gridSize;
-    const fy = ((e.clientY - rect.top) / height) * state.gridSize;
+    const fx = ((e.clientX - rect.left) / width) * state.gridW;
+    const fy = ((e.clientY - rect.top) / height) * state.gridH;
     return {
       fx,
       fy,
       x: Math.floor(fx),
       y: Math.floor(fy),
-      inside: fx >= 0 && fy >= 0 && fx < state.gridSize && fy < state.gridSize,
+      inside: fx >= 0 && fy >= 0 && fx < state.gridW && fy < state.gridH,
     };
   }
 
@@ -381,8 +416,8 @@
       return;
     }
     const size = defaultSize(sprite);
-    const x = clamp(pos.x, 0, state.gridSize - size.w);
-    const y = clamp(pos.y, 0, state.gridSize - size.h);
+    const x = clamp(pos.x, 0, state.gridW - size.w);
+    const y = clamp(pos.y, 0, state.gridH - size.h);
     showGhost(x, y, size.w, size.h);
   }
 
@@ -391,8 +426,8 @@
     const pos = eventToBoard(e);
     if (!sprite || !pos.inside) return null;
     const size = defaultSize(sprite);
-    const x = clamp(pos.x, 0, state.gridSize - size.w);
-    const y = clamp(pos.y, 0, state.gridSize - size.h);
+    const x = clamp(pos.x, 0, state.gridW - size.w);
+    const y = clamp(pos.y, 0, state.gridH - size.h);
     return placeSprite(spriteId, x, y, size);
   }
 
@@ -473,15 +508,20 @@
   }
 
   function renderBoardFrame() {
-    els.board.style.setProperty("--grid", String(state.gridSize));
+    els.board.style.setProperty("--grid-w", String(state.gridW));
+    els.board.style.setProperty("--grid-h", String(state.gridH));
     els.board.style.setProperty("--tile", `${TILE}px`);
     els.board.style.transform = `scale(${state.zoom})`;
     els.board.classList.toggle("show-grid", state.showGrid);
-    const size = state.gridSize * TILE * state.zoom;
-    els.boardWrap.style.width = `${size + 96}px`;
-    els.boardWrap.style.height = `${size + 96}px`;
+    const viewW = state.gridW * TILE * state.zoom;
+    const viewH = state.gridH * TILE * state.zoom;
+    els.boardWrap.style.width = `${viewW + 96}px`;
+    els.boardWrap.style.height = `${viewH + 96}px`;
     els.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
-    if (els.sizeReadout) els.sizeReadout.textContent = `Image ${exportPixels()} x ${exportPixels()}`;
+    if (els.sizeReadout) {
+      const image = exportPixels();
+      els.sizeReadout.textContent = `Image ${image.w} x ${image.h}`;
+    }
     els.toggleGrid.classList.toggle("on", state.showGrid);
     els.toggleGrid.setAttribute("aria-pressed", String(state.showGrid));
   }
@@ -680,16 +720,16 @@
         if (!recNow || !canEditLayer(recNow.layerId)) return;
         checkpoint();
         recNow.item[key] = clamp(parseInt(input.value, 10) || 0, min, maxFn(recNow.item));
-        clampItem(recNow.item, state.gridSize);
+        clampItem(recNow.item);
         renderItems();
         renderInspector();
         renderStatus();
       });
     };
-    bind("insp-x", "x", 0, (it) => state.gridSize - it.w);
-    bind("insp-y", "y", 0, (it) => state.gridSize - it.h);
-    bind("insp-w", "w", 1, (it) => state.gridSize - it.x);
-    bind("insp-h", "h", 1, (it) => state.gridSize - it.y);
+    bind("insp-x", "x", 0, (it) => state.gridW - it.w);
+    bind("insp-y", "y", 0, (it) => state.gridH - it.h);
+    bind("insp-w", "w", 1, (it) => state.gridW - it.x);
+    bind("insp-h", "h", 1, (it) => state.gridH - it.y);
     document.getElementById("bring-front")?.addEventListener("click", () => {
       if (!canEditLayer(layerId)) return;
       checkpoint();
@@ -768,7 +808,7 @@
       flipY: false,
       rotation: 0,
     };
-    clampItem(item, state.gridSize);
+    clampItem(item);
     checkpoint();
     state.layers[state.activeLayer].items.push(item);
     state.selectedIds = [item.id];
@@ -854,17 +894,18 @@
   }
 
   function applyResize(start, handle, pos) {
-    const grid = state.gridSize;
+    const gw = state.gridW;
+    const gh = state.gridH;
     let { x, y, w, h } = start;
     const right = x + w;
     const bottom = y + h;
-    const snapX = clamp(Math.round(pos.fx), 0, grid);
-    const snapY = clamp(Math.round(pos.fy), 0, grid);
+    const snapX = clamp(Math.round(pos.fx), 0, gw);
+    const snapY = clamp(Math.round(pos.fy), 0, gh);
     if (handle.includes("e")) {
-      w = clamp(snapX - x, 1, grid - x);
+      w = clamp(snapX - x, 1, gw - x);
     }
     if (handle.includes("s")) {
-      h = clamp(snapY - y, 1, grid - y);
+      h = clamp(snapY - y, 1, gh - y);
     }
     if (handle.includes("w")) {
       x = clamp(snapX, 0, right - 1);
@@ -897,15 +938,15 @@
   }
 
   function setGridSize(next) {
-    const size = Number(next);
-    if (size === state.gridSize) return;
+    const dims = parseGridValue(next);
+    if (dims.w === state.gridW && dims.h === state.gridH) return;
     checkpoint();
-    state.gridSize = size;
+    applyGridDims(dims.w, dims.h);
     let clamped = false;
     for (const layerId of LAYER_ORDER) {
       for (const item of state.layers[layerId].items) {
         const before = `${item.x},${item.y},${item.w},${item.h}`;
-        clampItem(item, size);
+        clampItem(item);
         if (`${item.x},${item.y},${item.w},${item.h}` !== before) clamped = true;
       }
     }
@@ -915,8 +956,7 @@
 
   function loadSample() {
     checkpoint();
-    state.gridSize = 32;
-    els.gridSize.value = "32";
+    applyGridDims(32, 32);
     state.layers = {
       background: {
         visible: true,
@@ -974,7 +1014,7 @@
     const data = {
       app: "Layout Maker",
       version: 1,
-      grid: { cols: state.gridSize, rows: state.gridSize },
+      grid: { cols: state.gridW, rows: state.gridH },
       layers: LAYER_ORDER.map((id) => ({
         id,
         name: LAYER_META[id].name,
@@ -994,7 +1034,7 @@
       })),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    downloadBlob(blob, `layout-${state.gridSize}x${state.gridSize}.json`);
+    downloadBlob(blob, `layout-${state.gridW}x${state.gridH}.json`);
     toast("Exported layout JSON");
   }
 
@@ -1164,16 +1204,16 @@
   async function exportPNG() {
     const unit = EXPORT_TILE;
     const canvas = document.createElement("canvas");
-    canvas.width = state.gridSize * unit;
-    canvas.height = state.gridSize * unit;
+    canvas.width = state.gridW * unit;
+    canvas.height = state.gridH * unit;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#151a24";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const checker = unit;
     ctx.fillStyle = "#131820";
-    for (let y = 0; y < state.gridSize; y += 1) {
-      for (let x = 0; x < state.gridSize; x += 1) {
+    for (let y = 0; y < state.gridH; y += 1) {
+      for (let x = 0; x < state.gridW; x += 1) {
         if ((x + y) % 2 === 0) ctx.fillRect(x * checker, y * checker, checker, checker);
       }
     }
@@ -1199,9 +1239,11 @@
       ctx.strokeStyle = "rgba(232, 236, 244, 0.18)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let i = 0; i <= state.gridSize; i += 1) {
+      for (let i = 0; i <= state.gridW; i += 1) {
         ctx.moveTo(i * unit + 0.5, 0);
         ctx.lineTo(i * unit + 0.5, canvas.height);
+      }
+      for (let i = 0; i <= state.gridH; i += 1) {
         ctx.moveTo(0, i * unit + 0.5);
         ctx.lineTo(canvas.width, i * unit + 0.5);
       }
@@ -1209,7 +1251,7 @@
     }
 
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-    downloadBlob(blob, `layout-${state.gridSize}x${state.gridSize}.png`);
+    downloadBlob(blob, `layout-${state.gridW}x${state.gridH}.png`);
     toast(state.showGrid ? "Exported PNG with grid lines" : "Exported PNG without grid lines");
   }
 

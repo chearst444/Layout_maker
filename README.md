@@ -11,11 +11,11 @@ Tile-based visual layout mockup tool for Snack Quests and other indie game UI wo
 ## What you can do
 
 ### Grid and workspace
-- Choose **32 x 32 grid** or **48 x 48 grid** in the toolbar.
+- Choose a grid size in the toolbar: **32 x 32**, **48 x 48**, **48 x 27 landscape (16:9)**, or **64 x 36 landscape (16:9)**. Landscape presets are for backgrounds and wider mockups.
 - Toggle grid lines with the grid button.
 - Zoom in and out from the toolbar on every screen size. Click the **100%** label to reset zoom. Zoom only scales the workspace view.
 - Hold **Space** and drag on the workspace to pan the scene (cursor is grab / grabbing). Middle-mouse drag also pans. Releasing Space returns to select, stamp, or marquee. Space does not pan while a text field is focused.
-- The toolbar shows **Image** size (PNG pixels, 32 px per tile). The status bar also shows **View** size (24 px per tile at 100% zoom). A 32 x 32 board is 768 x 768 on screen and 1024 x 1024 in the PNG. A 48 x 48 board is 1152 x 1152 on screen and 1536 x 1536 in the PNG. Zoom does not change the image size.
+- The toolbar shows **Image** size (PNG pixels, 32 px per tile). The status bar also shows **View** size (24 px per tile at 100% zoom) as `View Ww x Hh · Image Ew x Eh`. A 32 x 32 board is 768 x 768 on screen and 1024 x 1024 in the PNG. A 48 x 27 landscape board is 1152 x 648 on screen and 1536 x 864 in the PNG. A 64 x 36 landscape board is 1536 x 864 on screen and 2048 x 1152 in the PNG. Zoom does not change the image size.
 
 ### Layers
 Three stacked layers: **Background**, **Middle**, **Foreground**.
@@ -46,7 +46,7 @@ The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, tr
 ## Export
 
 ### PNG
-**Export PNG** rasterizes currently **visible** layers (hidden layers are skipped). Grid lines are included **only if the grid is currently shown**. If you hide the grid first, the PNG has no grid overlay. Image size is 32 pixels per tile (1024 x 1024 for 32 x 32, 1536 x 1536 for 48 x 48). Zoom does not change the image size.
+**Export PNG** rasterizes currently **visible** layers (hidden layers are skipped). Grid lines are included **only if the grid is currently shown**. If you hide the grid first, the PNG has no grid overlay. Image size is 32 pixels per tile (1024 x 1024 for 32 x 32, 1536 x 864 for 48 x 27 landscape, 2048 x 1152 for 64 x 36 landscape). Zoom does not change the image size.
 
 ### JSON
 **Export JSON** writes layer structure with tile coordinates:
@@ -60,5 +60,5 @@ The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, tr
 ## Notes
 - Placement always targets the active layer. You cannot drop onto a hidden or locked active layer.
 - Stamp mode takes priority over marquee. Press Escape to leave stamp mode before dragging a selection box.
-- Switching from 48 x 48 down to 32 x 32 clamps any items that would sit outside the new bounds.
+- Switching to a smaller or shorter grid clamps any items that would sit outside the new bounds.
 - Tailwind is loaded from the CDN, so the browser needs network access the first time you open the page.

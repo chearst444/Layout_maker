@@ -78,8 +78,10 @@ body {
 
 #board {
   position: relative;
-  width: calc(var(--grid) * var(--tile));
-  height: calc(var(--grid) * var(--tile));
+  --grid-w: 32;
+  --grid-h: 32;
+  width: calc(var(--grid-w) * var(--tile));
+  height: calc(var(--grid-h) * var(--tile));
   transform-origin: 0 0;
   background-color: #151a24;
   background-image:

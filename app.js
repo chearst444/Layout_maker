@@ -925,6 +925,19 @@
     const tile = clientToTile(event.clientX, event.clientY);
     const hit = hitItem(event.clientX, event.clientY);
 
+    if (state.stampId && inBoardTiles(tile.x, tile.y)) {
+      const spr = getSprite(state.stampId);
+      const blockedBySameLayer = hit && hit.layerName === state.activeLayer;
+      if (spr && !blockedBySameLayer) {
+        event.preventDefault();
+        els.board.focus();
+        placeSprite(spr, tile.x, tile.y);
+        record();
+        renderAll();
+        return;
+      }
+    }
+
     if (hit) {
       event.preventDefault();
       els.board.focus();
@@ -947,18 +960,6 @@
       renderPalette();
       renderStatus();
       return;
-    }
-
-    if (state.stampId && inBoardTiles(tile.x, tile.y)) {
-      const spr = getSprite(state.stampId);
-      if (spr) {
-        event.preventDefault();
-        els.board.focus();
-        placeSprite(spr, tile.x, tile.y);
-        record();
-        renderAll();
-        return;
-      }
     }
 
     state.selectedId = null;

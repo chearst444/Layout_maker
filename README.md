@@ -42,8 +42,8 @@ Three stacked layers: **Background**, **Middle**, **Foreground**.
 ### Sprites
 The left sidebar has built-in UI placeholders (rect, circle, rounded rect, triangle, diamond, hexagon, panel frame, button, icon slot, HUD bar, window frame, badge).
 
-- Click a sprite to enter stamp mode, then click empty tiles on the grid.
-- Drag a sprite from the sidebar onto the board. Drops snap to tile coordinates.
+- Click a sprite to enter stamp mode, then click the grid to place it. Stamps can stack on sprites that live on a different layer (for example a Foreground badge over a Middle window). Clicking a sprite on the **active** layer selects it so you can move or resize.
+- Drag a sprite from the sidebar onto the board. Drops snap to tile coordinates and can stack anywhere.
 - **Upload** (or drop images on the dashed zone) to add custom sprites.
 
 ### Edit

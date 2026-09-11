@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Layout Maker</title>
+    <meta
+      name="description"
+      content="Tile-based visual layout mockup tool for Snack Quests and indie game UI."
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2312161f'/%3E%3Crect x='6' y='6' width='8' height='8' rx='1.5' fill='%235b8def'/%3E%3Crect x='18' y='6' width='8' height='8' rx='1.5' fill='%23e8a838'/%3E%3Crect x='6' y='18' width='8' height='8' rx='1.5' fill='%235ee4a3'/%3E%3Crect x='18' y='18' width='8' height='8' rx='1.5' fill='%232a3142'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: { DEFAULT: "#0b0d12", panel: "#12161f", raised: "#181d28", line: "#2a3142" },
+              honey: { DEFAULT: "#e8a838", dim: "#b07c22" },
+              mist: "#9aa3b8",
+            },
+            fontFamily: {
+              sans: ["Outfit", "ui-sans-serif", "system-ui", "sans-serif"],
+              mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+            },
+          },
+        },
+        safelist: [
+          "h-2",
+          "w-2",
+          "h-10",
+          "h-12",
+          "rounded-full",
+          "object-contain",
+          "text-[9px]",
+          "text-[11px]",
+          "font-mono",
+          "p-2",
+          "mt-1",
+          "mt-0.5",
+          "mb-3",
+          "px-2",
+          "py-2",
+          "shrink-0",
+          "min-w-0",
+          "flex-1",
+          "grid",
+          "grid-cols-2",
+          "gap-2",
+          "uppercase",
+          "tracking-wider",
+          "bg-ink",
+          "bg-ink-line",
+          "bg-ink-raised",
+          "border-ink-line",
+          "text-mist",
+          "text-slate-100",
+          "ring-honey",
+          "focus:ring-1",
+          "outline-none",
+          "w-full",
+          "h-full",
+          "items-center",
+          "justify-center",
+          "text-left",
+          "truncate",
+          "hidden",
+        ],
+      };
+    </script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="h-screen overflow-hidden bg-ink text-slate-100 antialiased">
+    <div class="flex h-full flex-col">
+      <header class="flex h-14 shrink-0 items-center gap-3 border-b border-ink-line bg-ink-panel px-3 md:px-4">
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="grid h-8 w-8 shrink-0 grid-cols-2 gap-0.5 rounded-lg bg-ink-raised p-1 ring-1 ring-ink-line">
+            <span class="rounded-sm bg-[#5b8def]"></span>
+            <span class="rounded-sm bg-honey"></span>
+            <span class="rounded-sm bg-[#5ee4a3]"></span>
+            <span class="rounded-sm bg-ink-line"></span>
+          </div>
+          <div class="min-w-0">
+            <div class="truncate text-sm font-semibold leading-tight">Layout Maker</div>
+            <div class="truncate text-[11px] text-mist">Snack Quests layout tooling</div>
+          </div>
+        </div>
+
+        <div class="mx-2 hidden h-6 w-px bg-ink-line sm:block"></div>
+
+        <label class="flex items-center gap-2 text-xs text-mist">
+          <span class="hidden sm:inline">Grid</span>
+          <select
+            id="grid-size"
+            class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-xs font-medium text-slate-100 outline-none ring-honey focus:ring-1"
+            title="Grid dimensions"
+          >
+            <option value="32">32 x 32 grid</option>
+            <option value="48">48 x 48 grid</option>
+          </select>
+        </label>
+
+        <button
+          id="toggle-grid"
+          class="icon-btn on"
+          type="button"
+          title="Toggle grid lines"
+          aria-pressed="true"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18" />
+          </svg>
+        </button>
+
+        <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <div class="hidden items-center rounded-lg border border-ink-line bg-ink-raised p-0.5 md:flex">
+            <button id="zoom-out" class="icon-btn h-7 w-7" type="button" title="Zoom out">-</button>
+            <span id="zoom-label" class="mono min-w-[3.2rem] text-center text-[11px] text-mist">100%</span>
+            <button id="zoom-in" class="icon-btn h-7 w-7" type="button" title="Zoom in">+</button>
+          </div>
+          <button
+            id="load-sample"
+            class="hidden rounded-lg border border-ink-line bg-ink-raised px-2.5 py-1.5 text-xs font-medium text-mist hover:text-slate-100 md:inline-flex"
+            type="button"
+          >
+            Load sample
+          </button>
+          <button
+            id="export-json"
+            class="rounded-lg border border-ink-line bg-ink-raised px-2.5 py-1.5 text-xs font-medium hover:border-mist"
+            type="button"
+          >
+            Export JSON
+          </button>
+          <button
+            id="export-png"
+            class="rounded-lg bg-honey px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-[#f0b64a]"
+            type="button"
+          >
+            Export PNG
+          </button>
+        </div>
+      </header>
+
+      <div class="flex min-h-0 flex-1">
+        <aside class="flex w-[220px] shrink-0 flex-col border-r border-ink-line bg-ink-panel md:w-[250px]">
+          <div class="flex items-center justify-between px-3 py-3">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-mist">Sprites</h2>
+            <span id="stamp-hint" class="text-[10px] text-mist/80"></span>
+          </div>
+          <label
+            id="upload-zone"
+            class="drop-target mx-3 mb-3 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-ink-line bg-ink-raised px-3 py-4 text-center hover:border-honey/60"
+          >
+            <input id="sprite-upload" type="file" accept="image/*" multiple class="hidden" />
+            <svg class="mb-1 text-honey" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M12 16V4M8 8l4-4 4 4" />
+              <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+            </svg>
+            <div class="text-xs font-medium">Upload sprites</div>
+            <div class="mt-0.5 text-[10px] text-mist">PNG, SVG, or WebP. Drop files here.</div>
+          </label>
+          <div class="min-h-0 flex-1 overflow-y-auto app-scroll px-3 pb-3">
+            <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-mist">Shapes</div>
+            <div id="sprite-builtin" class="grid grid-cols-2 gap-2"></div>
+            <div id="uploads-wrap" class="mt-4 hidden">
+              <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-mist">Uploads</div>
+              <div id="sprite-uploads" class="grid grid-cols-2 gap-2"></div>
+            </div>
+          </div>
+        </aside>
+
+        <main id="workspace" class="workspace app-scroll relative min-w-0 flex-1 overflow-auto">
+          <div id="board-wrap">
+            <div id="board">
+              <div id="layer-background" class="layer" data-layer="background"></div>
+              <div id="layer-middle" class="layer" data-layer="middle"></div>
+              <div id="layer-foreground" class="layer" data-layer="foreground"></div>
+              <div id="ghost"></div>
+              <div id="selection">
+                <div class="handle nw" data-handle="nw"></div>
+                <div class="handle n" data-handle="n"></div>
+                <div class="handle ne" data-handle="ne"></div>
+                <div class="handle e" data-handle="e"></div>
+                <div class="handle se" data-handle="se"></div>
+                <div class="handle s" data-handle="s"></div>
+                <div class="handle sw" data-handle="sw"></div>
+                <div class="handle w" data-handle="w"></div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <aside class="flex w-[220px] shrink-0 flex-col border-l border-ink-line bg-ink-panel md:w-[250px]">
+          <div class="border-b border-ink-line px-3 py-3">
+            <h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-mist">Layers</h2>
+            <div id="layer-list" class="space-y-2"></div>
+            <p class="mt-2 text-[10px] leading-relaxed text-mist">
+              Place on the active layer. Hide with the eye. Lock to avoid edits.
+            </p>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto app-scroll px-3 py-3">
+            <div class="mb-2 flex items-center justify-between">
+              <h2 class="text-xs font-semibold uppercase tracking-wider text-mist">Inspector</h2>
+              <button
+                id="delete-item"
+                class="icon-btn warn h-7 w-7"
+                type="button"
+                title="Delete selected (Delete)"
+                disabled
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M4 7h16M9 7V5h6v2M8 7l1 13h6l1-13" />
+                </svg>
+              </button>
+            </div>
+            <div id="inspector" class="text-xs text-mist">Select a placed sprite to edit it.</div>
+          </div>
+        </aside>
+      </div>
+
+      <footer class="flex h-9 shrink-0 items-center justify-between gap-3 border-t border-ink-line bg-ink-panel px-3 text-[11px] text-mist">
+        <div id="status-left" class="mono truncate">Tile -, -</div>
+        <div id="status-right" class="truncate">Esc deselects. Delete removes. Ctrl/Cmd+Z undoes.</div>
+      </footer>
+    </div>
+    <div id="toast" role="status"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

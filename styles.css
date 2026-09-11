@@ -212,6 +212,43 @@ body {
   pointer-events: none;
 }
 
+.history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: #e8ecf4;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.history-btn:hover:not(:disabled) {
+  border-color: var(--mist);
+  color: #fff;
+}
+
+.history-btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+@media (max-width: 639px) {
+  .history-btn span {
+    display: none;
+  }
+
+  .history-btn {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
 #toast {
   position: fixed;
   bottom: 56px;

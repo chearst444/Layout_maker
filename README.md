@@ -34,7 +34,7 @@ The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, tr
 - Inspector fields edit X, Y, W, H in tiles. Send back / Bring front changes stacking inside the layer.
 - **Delete** or **Backspace** removes the selection. The trash control in the inspector does the same.
 - **Escape** clears the selection and stamp tool.
-- Arrow keys nudge one tile. **Ctrl/Cmd+Z** undoes. **Ctrl/Cmd+Shift+Z** or **Ctrl/Cmd+Y** redoes.
+- Arrow keys nudge one tile. Toolbar **Undo** and **Redo** buttons share the same history as **Ctrl/Cmd+Z**, **Ctrl/Cmd+Shift+Z**, and **Ctrl/Cmd+Y**. Buttons disable when there is nothing to undo or redo.
 
 **Load sample** drops a small HUD mockup onto a 32 x 32 board so you can try hide, lock, move, and export immediately.
 

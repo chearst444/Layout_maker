@@ -118,6 +118,37 @@
           </svg>
         </button>
 
+        <div class="flex shrink-0 items-center gap-1">
+          <button
+            id="undo-btn"
+            class="history-btn"
+            type="button"
+            title="Undo (Ctrl/Cmd+Z)"
+            aria-label="Undo"
+            disabled
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M9 14H4v-5" />
+              <path d="M4 9a9 9 0 1 1-1.15 6" />
+            </svg>
+            <span>Undo</span>
+          </button>
+          <button
+            id="redo-btn"
+            class="history-btn"
+            type="button"
+            title="Redo (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)"
+            aria-label="Redo"
+            disabled
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M15 14h5v-5" />
+              <path d="M20 9a9 9 0 1 0 1.15 6" />
+            </svg>
+            <span>Redo</span>
+          </button>
+        </div>
+
         <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
           <div class="hidden items-center rounded-lg border border-ink-line bg-ink-raised p-0.5 md:flex">
             <button id="zoom-out" class="icon-btn h-7 w-7" type="button" title="Zoom out">-</button>
@@ -227,7 +258,7 @@
 
       <footer class="flex h-9 shrink-0 items-center justify-between gap-3 border-t border-ink-line bg-ink-panel px-3 text-[11px] text-mist">
         <div id="status-left" class="mono truncate">Tile -, -</div>
-        <div id="status-right" class="truncate">Esc deselects. Delete removes. Ctrl/Cmd+Z undoes.</div>
+        <div id="status-right" class="truncate">Esc deselects. Delete removes. Ctrl/Cmd+Z undoes. Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes.</div>
       </footer>
     </div>
     <div id="toast" role="status"></div>

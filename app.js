@@ -39,6 +39,8 @@
     statusRight: document.getElementById("status-right"),
     gridSize: document.getElementById("grid-size"),
     toggleGrid: document.getElementById("toggle-grid"),
+    undo: document.getElementById("undo-btn"),
+    redo: document.getElementById("redo-btn"),
     zoomIn: document.getElementById("zoom-in"),
     zoomOut: document.getElementById("zoom-out"),
     zoomLabel: document.getElementById("zoom-label"),
@@ -100,6 +102,12 @@
     history.push(snapshot());
     if (history.length > MAX_HISTORY) history.shift();
     future.length = 0;
+    syncHistoryButtons();
+  }
+
+  function syncHistoryButtons() {
+    els.undo.disabled = !history.length;
+    els.redo.disabled = !future.length;
   }
 
   function restore(snap) {
@@ -452,7 +460,7 @@
     const extra = rec ? `  |  ${rec.item.w} x ${rec.item.h} at ${rec.item.x}, ${rec.item.y}` : hoverItemId ? "  |  click to select" : "";
     els.statusLeft.textContent = tileText + extra;
     const counts = LAYER_ORDER.map((id) => state.layers[id].items.length).reduce((a, b) => a + b, 0);
-    els.statusRight.textContent = `${state.gridSize} x ${state.gridSize}  |  ${LAYER_META[state.activeLayer].name}  |  ${counts} items  |  Esc deselects, Delete removes, Ctrl/Cmd+Z undoes`;
+    els.statusRight.textContent = `${state.gridSize} x ${state.gridSize}  |  ${LAYER_META[state.activeLayer].name}  |  ${counts} items  |  Esc deselects, Delete removes, Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Y redoes`;
   }
 
   function renderAll() {
@@ -462,6 +470,7 @@
     renderLayers();
     renderInspector();
     renderStatus();
+    syncHistoryButtons();
   }
 
   function placeSprite(spriteId, x, y, size) {
@@ -1019,6 +1028,7 @@
     if (!interaction || interaction.type === "palette") return;
     if (interaction.type === "move" && !interaction.moved) {
       history.pop();
+      syncHistoryButtons();
     }
     if (interaction.type === "resize" || interaction.moved) {
       renderLayers();
@@ -1085,6 +1095,8 @@
     state.showGrid = !state.showGrid;
     renderBoardFrame();
   });
+  els.undo.addEventListener("click", undo);
+  els.redo.addEventListener("click", redo);
   els.zoomIn.addEventListener("click", () => {
     state.zoom = clamp(Math.round((state.zoom + 0.25) * 100) / 100, 0.5, 2);
     renderBoardFrame();

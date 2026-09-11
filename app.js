@@ -1,5 +1,5 @@
 (() => {
-  const TILE = 20;
+  const TILE = 24;
   const LAYER_ORDER = ["background", "middle", "foreground"];
   const LAYER_META = {
     background: { name: "Background", accent: "#5b8def" },

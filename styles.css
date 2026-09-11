@@ -207,8 +207,9 @@ body {
   background: rgba(232, 168, 56, 0.12);
 }
 
-.icon-btn.warn {
-  color: #f0b4b4;
+.icon-btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 #toast {

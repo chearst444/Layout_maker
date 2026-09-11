@@ -30,6 +30,7 @@
     boardWrap: document.getElementById("board-wrap"),
     workspace: document.getElementById("workspace"),
     ghost: document.getElementById("ghost"),
+    marquee: document.getElementById("marquee"),
     selection: document.getElementById("selection"),
     builtin: document.getElementById("sprite-builtin"),
     uploads: document.getElementById("sprite-uploads"),
@@ -67,7 +68,7 @@
     showGrid: true,
     zoom: 1,
     activeLayer: "middle",
-    selectedId: null,
+    selectedIds: [],
     stampId: null,
     hoverTile: null,
     layers: {
@@ -116,7 +117,7 @@
   function restore(snap) {
     state.gridSize = snap.gridSize;
     state.layers = clone(snap.layers);
-    if (!findItem(state.selectedId)) state.selectedId = null;
+    state.selectedIds = state.selectedIds.filter((id) => findItem(id));
     els.gridSize.value = String(state.gridSize);
     renderAll();
   }
@@ -164,7 +165,39 @@
   }
 
   function selectedRecord() {
-    return findItem(state.selectedId);
+    return findItem(state.selectedIds[state.selectedIds.length - 1]);
+  }
+
+  function selectedRecords() {
+    return state.selectedIds.map(findItem).filter(Boolean);
+  }
+
+  function editableSelected() {
+    return selectedRecords().filter((rec) => canEditLayer(rec.layerId));
+  }
+
+  function isSelected(id) {
+    return state.selectedIds.includes(id);
+  }
+
+  function setSelection(ids) {
+    const next = [];
+    for (const id of ids) {
+      if (id && !next.includes(id) && findItem(id)) next.push(id);
+    }
+    state.selectedIds = next;
+  }
+
+  function clearSelection() {
+    state.selectedIds = [];
+  }
+
+  function toggleSelected(id) {
+    if (isSelected(id)) {
+      state.selectedIds = state.selectedIds.filter((x) => x !== id);
+    } else if (findItem(id)) {
+      state.selectedIds.push(id);
+    }
   }
 
   function layerOfItem(id) {
@@ -258,14 +291,67 @@
   }
 
   function transformSelected(mutator) {
-    const rec = selectedRecord();
-    if (!rec || !canEditLayer(rec.layerId)) return;
+    const recs = editableSelected();
+    if (!recs.length) return;
     checkpoint();
-    mutator(rec.item);
-    clampItem(rec.item, state.gridSize);
+    for (const rec of recs) {
+      mutator(rec.item);
+      clampItem(rec.item, state.gridSize);
+    }
     renderItems();
     renderInspector();
     renderStatus();
+  }
+
+  function clampGroupDelta(starts, dx, dy) {
+    let minDx = -Infinity;
+    let maxDx = Infinity;
+    let minDy = -Infinity;
+    let maxDy = Infinity;
+    for (const start of starts) {
+      const rec = findItem(start.id);
+      if (!rec) continue;
+      minDx = Math.max(minDx, -start.x);
+      maxDx = Math.min(maxDx, state.gridSize - rec.item.w - start.x);
+      minDy = Math.max(minDy, -start.y);
+      maxDy = Math.min(maxDy, state.gridSize - rec.item.h - start.y);
+    }
+    if (!Number.isFinite(minDx)) return { dx: 0, dy: 0 };
+    return {
+      dx: clamp(dx, minDx, maxDx),
+      dy: clamp(dy, minDy, maxDy),
+    };
+  }
+
+  function itemsIntersectingMarquee(x0, y0, x1, y1) {
+    const x = Math.min(x0, x1);
+    const y = Math.min(y0, y1);
+    const w = Math.max(Math.abs(x1 - x0), 0.02);
+    const h = Math.max(Math.abs(y1 - y0), 0.02);
+    const ids = [];
+    for (const layerId of LAYER_ORDER) {
+      const layer = state.layers[layerId];
+      if (!layer.visible) continue;
+      for (const item of layer.items) {
+        const overlap = x < item.x + item.w && x + w > item.x && y < item.y + item.h && y + h > item.y;
+        if (overlap) ids.push(item.id);
+      }
+    }
+    return ids;
+  }
+
+  function showMarquee(x0, y0, x1, y1) {
+    const x = Math.min(x0, x1);
+    const y = Math.min(y0, y1);
+    els.marquee.classList.add("on");
+    els.marquee.style.left = `${x * TILE}px`;
+    els.marquee.style.top = `${y * TILE}px`;
+    els.marquee.style.width = `${Math.abs(x1 - x0) * TILE}px`;
+    els.marquee.style.height = `${Math.abs(y1 - y0) * TILE}px`;
+  }
+
+  function hideMarquee() {
+    els.marquee.classList.remove("on");
   }
 
   function eventToBoard(e) {
@@ -407,7 +493,7 @@
       node.style.zIndex = String(LAYER_ORDER.indexOf(layerId) + 1);
       node.innerHTML = layer.items
         .map((item) => {
-          const selected = item.id === state.selectedId ? " selected" : "";
+          const selected = isSelected(item.id) && state.selectedIds.length > 1 ? " selected" : "";
           const inner = contentSize(item);
           return `<div class="placed${selected}" data-id="${item.id}" style="left:${item.x * TILE}px;top:${item.y * TILE}px;width:${item.w * TILE}px;height:${item.h * TILE}px"><div class="placed-visual" style="width:${inner.w * TILE}px;height:${inner.h * TILE}px;transform:${visualTransform(item)}">${itemMarkup(item)}</div></div>`;
         })
@@ -417,23 +503,38 @@
   }
 
   function renderSelection() {
-    const rec = selectedRecord();
-    if (!rec || !state.layers[rec.layerId].visible) {
+    const recs = selectedRecords().filter((rec) => state.layers[rec.layerId].visible);
+    const editable = editableSelected();
+    els.deleteItem.disabled = !editable.length;
+    if (!recs.length) {
       els.selection.classList.remove("active");
-      els.deleteItem.disabled = true;
       return;
     }
-    const { item } = rec;
+    if (recs.length === 1) {
+      const { item, layerId } = recs[0];
+      els.selection.classList.add("active");
+      els.selection.style.left = `${item.x * TILE}px`;
+      els.selection.style.top = `${item.y * TILE}px`;
+      els.selection.style.width = `${item.w * TILE}px`;
+      els.selection.style.height = `${item.h * TILE}px`;
+      const canResize = canEditLayer(layerId);
+      els.selection.querySelectorAll(".handle").forEach((h) => {
+        h.style.display = canResize ? "block" : "none";
+      });
+      return;
+    }
+    const minX = Math.min(...recs.map((r) => r.item.x));
+    const minY = Math.min(...recs.map((r) => r.item.y));
+    const maxX = Math.max(...recs.map((r) => r.item.x + r.item.w));
+    const maxY = Math.max(...recs.map((r) => r.item.y + r.item.h));
     els.selection.classList.add("active");
-    els.selection.style.left = `${item.x * TILE}px`;
-    els.selection.style.top = `${item.y * TILE}px`;
-    els.selection.style.width = `${item.w * TILE}px`;
-    els.selection.style.height = `${item.h * TILE}px`;
-    const editable = canEditLayer(rec.layerId);
+    els.selection.style.left = `${minX * TILE}px`;
+    els.selection.style.top = `${minY * TILE}px`;
+    els.selection.style.width = `${(maxX - minX) * TILE}px`;
+    els.selection.style.height = `${(maxY - minY) * TILE}px`;
     els.selection.querySelectorAll(".handle").forEach((h) => {
-      h.style.display = editable ? "block" : "none";
+      h.style.display = "none";
     });
-    els.deleteItem.disabled = !editable;
   }
 
   function renderPalette() {
@@ -482,11 +583,62 @@
   }
 
   function renderInspector() {
-    const rec = selectedRecord();
-    if (!rec) {
-      els.inspector.innerHTML = `<p>Select a placed sprite to edit it.</p>`;
+    const recs = selectedRecords();
+    if (!recs.length) {
+      els.inspector.innerHTML = `<p>Select a placed sprite to edit it. Drag a box on empty board space to select several.</p>`;
       return;
     }
+    if (recs.length > 1) {
+      const editable = editableSelected();
+      const disabled = editable.length ? "" : "disabled";
+      const allFlipX = editable.length && editable.every((r) => r.item.flipX);
+      const allFlipY = editable.length && editable.every((r) => r.item.flipY);
+      els.inspector.innerHTML = `
+        <div class="mb-3 rounded-lg border border-ink-line bg-ink-raised p-2">
+          <div class="text-[10px] uppercase tracking-wider text-mist">Selection</div>
+          <div class="mt-1 font-medium text-slate-100">${recs.length} sprites</div>
+          <div class="mt-0.5 text-[10px] text-mist">${editable.length} editable on unlocked layers</div>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" id="send-back" class="flex-1 rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled}>Send back</button>
+          <button type="button" id="bring-front" class="flex-1 rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled}>Bring front</button>
+        </div>
+        <div class="mt-3">
+          <div class="mb-1 text-[10px] uppercase tracking-wider text-mist">Transform</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="flip-h" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]${allFlipX ? " on" : ""}" ${disabled} title="Flip horizontal">Flip H</button>
+            <button type="button" id="flip-v" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]${allFlipY ? " on" : ""}" ${disabled} title="Flip vertical">Flip V</button>
+            <button type="button" id="rot-ccw" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled} title="Rotate 90 degrees counterclockwise">Rotate left</button>
+            <button type="button" id="rot-cw" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled} title="Rotate 90 degrees clockwise">Rotate right</button>
+          </div>
+        </div>
+        ${editable.length ? "" : `<p class="mt-2 text-[10px] text-mist">Locked or hidden items cannot be edited.</p>`}
+      `;
+      document.getElementById("bring-front")?.addEventListener("click", () => {
+        const list = editableSelected();
+        if (!list.length) return;
+        checkpoint();
+        for (const rec of list) bringToFront(rec.item.id);
+        renderItems();
+      });
+      document.getElementById("send-back")?.addEventListener("click", () => {
+        const list = editableSelected();
+        if (!list.length) return;
+        checkpoint();
+        for (const rec of list) sendToBack(rec.item.id);
+        renderItems();
+      });
+      document.getElementById("flip-h")?.addEventListener("click", () => transformSelected((it) => {
+        it.flipX = !it.flipX;
+      }));
+      document.getElementById("flip-v")?.addEventListener("click", () => transformSelected((it) => {
+        it.flipY = !it.flipY;
+      }));
+      document.getElementById("rot-ccw")?.addEventListener("click", () => transformSelected((it) => rotateItem(it, -90)));
+      document.getElementById("rot-cw")?.addEventListener("click", () => transformSelected((it) => rotateItem(it, 90)));
+      return;
+    }
+    const rec = recs[0];
     const { item, layerId } = rec;
     const sprite = spriteById(item.spriteId);
     const locked = !canEditLayer(layerId);
@@ -574,6 +726,8 @@
     if (stamp) {
       const size = defaultSize(stamp);
       tileText = `${stampHintText()} (${size.w} x ${size.h} tiles)` + (hover ? `  |  ${tileText}` : "");
+    } else if (state.selectedIds.length > 1) {
+      tileText += `  |  ${state.selectedIds.length} selected`;
     } else if (rec) {
       tileText += `  |  ${rec.item.w} x ${rec.item.h} at ${rec.item.x}, ${rec.item.y}`;
     } else if (hoverItemId) {
@@ -616,7 +770,7 @@
     clampItem(item, state.gridSize);
     checkpoint();
     state.layers[state.activeLayer].items.push(item);
-    state.selectedId = item.id;
+    state.selectedIds = [item.id];
     renderItems();
     renderLayers();
     renderInspector();
@@ -625,16 +779,19 @@
   }
 
   function deleteSelected() {
-    const rec = selectedRecord();
-    if (!rec || !canEditLayer(rec.layerId)) return;
+    const recs = editableSelected();
+    if (!recs.length) return;
     checkpoint();
-    state.layers[rec.layerId].items = state.layers[rec.layerId].items.filter((it) => it.id !== rec.item.id);
-    state.selectedId = null;
+    const ids = new Set(recs.map((rec) => rec.item.id));
+    for (const layerId of LAYER_ORDER) {
+      state.layers[layerId].items = state.layers[layerId].items.filter((it) => !ids.has(it.id));
+    }
+    clearSelection();
     renderItems();
     renderLayers();
     renderInspector();
     renderStatus();
-    toast("Deleted sprite");
+    toast(recs.length === 1 ? "Deleted sprite" : `Deleted ${recs.length} sprites`);
   }
 
   function stampHintText() {
@@ -778,7 +935,7 @@
       },
     };
     state.activeLayer = "middle";
-    state.selectedId = null;
+    clearSelection();
     renderAll();
     toast("Loaded sample HUD layout");
   }
@@ -1093,7 +1250,7 @@
     if (e.button !== 0) return;
     const pos = eventToBoard(e);
     const handle = e.target.closest?.(".handle");
-    if (handle && state.selectedId && !state.stampId) {
+    if (handle && state.selectedIds.length === 1 && !state.stampId) {
       const rec = selectedRecord();
       if (!rec || !canEditLayer(rec.layerId)) return;
       checkpoint();
@@ -1117,20 +1274,26 @@
     const hit = pos.inside ? hitTestAll(pos.fx, pos.fy) : null;
     if (hit) {
       state.activeLayer = hit.layerId;
-      state.selectedId = hit.item.id;
       state.stampId = null;
+      if (e.shiftKey) {
+        toggleSelected(hit.item.id);
+      } else if (!isSelected(hit.item.id)) {
+        setSelection([hit.item.id]);
+      }
       renderPalette();
       renderLayers();
       renderItems();
       renderInspector();
       syncStampUI();
-      if (canEditLayer(hit.layerId)) {
+      if (isSelected(hit.item.id) && canEditLayer(hit.layerId)) {
+        const movers = editableSelected();
         checkpoint();
         interaction = {
           type: "move",
           itemId: hit.item.id,
           ox: pos.fx - hit.item.x,
           oy: pos.fy - hit.item.y,
+          startPositions: movers.map((rec) => ({ id: rec.item.id, x: rec.item.x, y: rec.item.y })),
           moved: false,
         };
         els.board.setPointerCapture(e.pointerId);
@@ -1139,10 +1302,29 @@
       return;
     }
 
-    state.selectedId = null;
-    renderItems();
-    renderInspector();
-    renderStatus();
+    if (pos.inside && !state.stampId) {
+      interaction = {
+        type: "marquee",
+        x0: pos.fx,
+        y0: pos.fy,
+        x1: pos.fx,
+        y1: pos.fy,
+        startX: e.clientX,
+        startY: e.clientY,
+        dragging: false,
+        additive: e.shiftKey,
+      };
+      els.board.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+
+    if (!e.shiftKey) {
+      clearSelection();
+      renderItems();
+      renderInspector();
+      renderStatus();
+    }
   }
 
   function onPointerMove(e) {
@@ -1165,15 +1347,36 @@
       return;
     }
 
+    if (interaction.type === "palette") return;
+
+    if (interaction.type === "marquee") {
+      interaction.x1 = pos.fx;
+      interaction.y1 = pos.fy;
+      if (Math.hypot(e.clientX - interaction.startX, e.clientY - interaction.startY) > 6) {
+        interaction.dragging = true;
+      }
+      showMarquee(interaction.x0, interaction.y0, interaction.x1, interaction.y1);
+      renderStatus();
+      return;
+    }
+
     const rec = findItem(interaction.itemId);
     if (!rec) return;
     if (interaction.type === "move") {
-      const nx = clamp(Math.round(pos.fx - interaction.ox), 0, state.gridSize - rec.item.w);
-      const ny = clamp(Math.round(pos.fy - interaction.oy), 0, state.gridSize - rec.item.h);
-      if (nx !== rec.item.x || ny !== rec.item.y) interaction.moved = true;
-      rec.item.x = nx;
-      rec.item.y = ny;
-      liveUpdateItem(rec.item);
+      const leadStart = interaction.startPositions.find((p) => p.id === rec.item.id) || { x: rec.item.x, y: rec.item.y };
+      const nx = Math.round(pos.fx - interaction.ox);
+      const ny = Math.round(pos.fy - interaction.oy);
+      const rawDx = nx - leadStart.x;
+      const rawDy = ny - leadStart.y;
+      const next = clampGroupDelta(interaction.startPositions, rawDx, rawDy);
+      if (next.dx !== 0 || next.dy !== 0) interaction.moved = true;
+      for (const start of interaction.startPositions) {
+        const moving = findItem(start.id);
+        if (!moving) continue;
+        moving.item.x = start.x + next.dx;
+        moving.item.y = start.y + next.dy;
+        liveUpdateItem(moving.item);
+      }
     }
     if (interaction.type === "resize") {
       const next = applyResize(interaction.start, interaction.handle, pos);
@@ -1187,6 +1390,20 @@
 
   function onPointerUp() {
     if (!interaction || interaction.type === "palette") return;
+    if (interaction.type === "marquee") {
+      hideMarquee();
+      if (interaction.dragging) {
+        const ids = itemsIntersectingMarquee(interaction.x0, interaction.y0, interaction.x1, interaction.y1);
+        setSelection(interaction.additive ? [...state.selectedIds, ...ids] : ids);
+      } else if (!interaction.additive) {
+        clearSelection();
+      }
+      renderItems();
+      renderInspector();
+      renderStatus();
+      interaction = null;
+      return;
+    }
     if (interaction.type === "move" && !interaction.moved) {
       history.pop();
       syncHistoryButtons();
@@ -1219,7 +1436,7 @@
       wasStamp: state.stampId === spriteId,
     };
     state.stampId = spriteId;
-    state.selectedId = null;
+    clearSelection();
     renderItems();
     renderInspector();
     syncStampUI();
@@ -1317,8 +1534,8 @@
     if (vis) {
       const id = vis.dataset.vis;
       state.layers[id].visible = !state.layers[id].visible;
-      if (!state.layers[id].visible && layerOfItem(state.selectedId) === id) {
-        state.selectedId = null;
+      if (!state.layers[id].visible) {
+        state.selectedIds = state.selectedIds.filter((itemId) => layerOfItem(itemId) !== id);
       }
       renderItems();
       renderLayers();
@@ -1354,7 +1571,7 @@
       return;
     }
     if (e.key === "Escape") {
-      state.selectedId = null;
+      clearSelection();
       state.stampId = null;
       renderPalette();
       renderItems();
@@ -1368,14 +1585,19 @@
       deleteSelected();
     }
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-      const rec = selectedRecord();
-      if (!rec || !canEditLayer(rec.layerId)) return;
+      const movers = editableSelected();
+      if (!movers.length) return;
       e.preventDefault();
-      checkpoint();
       const dx = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
       const dy = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
-      rec.item.x = clamp(rec.item.x + dx, 0, state.gridSize - rec.item.w);
-      rec.item.y = clamp(rec.item.y + dy, 0, state.gridSize - rec.item.h);
+      const starts = movers.map((rec) => ({ id: rec.item.id, x: rec.item.x, y: rec.item.y }));
+      const next = clampGroupDelta(starts, dx, dy);
+      if (next.dx === 0 && next.dy === 0) return;
+      checkpoint();
+      for (const rec of movers) {
+        rec.item.x += next.dx;
+        rec.item.y += next.dy;
+      }
       renderItems();
       renderInspector();
       renderStatus();

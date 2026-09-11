@@ -32,10 +32,11 @@ The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, tr
 - Click the same sprite again, or press **Escape**, to leave stamp mode.
 
 ### Edit placed sprites
-- Click to select (when not in stamp mode). Drag to move (tile snap). Drag the honey-colored handles to resize across tiles.
+- Click to select (when not in stamp mode). Shift-click adds or removes a sprite from the selection. Drag empty board space to draw a marquee. Visible sprites whose tiles intersect the box are selected (locked items can be selected, but move, transform, and delete skip them). Drag any selected unlocked sprite to move the whole unlocked group, snapped and clamped on the grid.
 - Inspector fields edit X, Y, W, H in tiles. Send back / Bring front changes stacking inside the layer.
-- **Flip H**, **Flip V**, **Rotate left**, and **Rotate right** (90 degrees) transform the selection. 90 / 270 rotation swaps width and height and keeps the item on the grid when possible. Locked layers cannot be transformed. Transforms undo with the history stack.
-- **Delete** or **Backspace** removes the selection. The trash control in the inspector does the same.
+- **Flip H**, **Flip V**, **Rotate left**, and **Rotate right** (90 degrees) transform every unlocked selected sprite. 90 / 270 rotation swaps width and height and keeps each item on the grid when possible. Locked items in a mixed selection are skipped.
+- **Delete** or **Backspace** removes unlocked selected sprites. The trash control in the inspector does the same.
+- Resize handles appear when exactly one sprite is selected.
 - **Escape** clears the selection and stamp tool.
 - Arrow keys nudge one tile. Toolbar **Undo** and **Redo** buttons share the same history as **Ctrl/Cmd+Z**, **Ctrl/Cmd+Shift+Z**, and **Ctrl/Cmd+Y**. Buttons disable when there is nothing to undo or redo.
 

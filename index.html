@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Layout Maker</title>
+  <meta name="description" content="Tile-based visual layout mockup tool for Snack Quests and indie game UI." />
+  <meta name="theme-color" content="#0c0e12" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%230c0e12' width='32' height='32' rx='6'/%3E%3Crect fill='%232a3140' x='6' y='6' width='9' height='9' rx='1'/%3E%3Crect fill='%23f0a14e' x='17' y='6' width='9' height='9' rx='1'/%3E%3Crect fill='%234ecdc4' x='6' y='17' width='9' height='9' rx='1'/%3E%3Crect fill='%23e76f51' x='17' y='17' width='9' height='9' rx='1'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: {
+              950: "#0c0e12",
+              900: "#12151c",
+              850: "#171b24",
+              800: "#1c212c",
+              700: "#2a3140",
+              600: "#3d4658",
+            },
+            quest: {
+              300: "#f6d59a",
+              400: "#f0a14e",
+              500: "#e08a2c",
+            },
+          },
+          fontFamily: {
+            sans: ["Outfit", "ui-sans-serif", "system-ui", "sans-serif"],
+            mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="h-screen flex flex-col overflow-hidden bg-ink-950 text-slate-100 font-sans">
+  <header class="flex-shrink-0 h-14 px-3 sm:px-4 flex items-center gap-2 sm:gap-3 border-b border-ink-700 bg-ink-900">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-7 h-7 rounded-md bg-ink-800 border border-ink-700 grid grid-cols-2 gap-0.5 p-1" aria-hidden="true">
+        <span class="rounded-[2px] bg-ink-600"></span>
+        <span class="rounded-[2px] bg-quest-400"></span>
+        <span class="rounded-[2px] bg-teal-400"></span>
+        <span class="rounded-[2px] bg-orange-400"></span>
+      </div>
+      <div class="min-w-0">
+        <h1 class="text-sm font-semibold leading-none tracking-wide">Layout Maker</h1>
+        <p class="text-[10px] text-slate-500 mt-0.5 truncate">Snack Quests layout tool</p>
+      </div>
+    </div>
+
+    <div class="hidden sm:block h-6 w-px bg-ink-700 mx-1"></div>
+
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-[10px] uppercase tracking-wider text-slate-500 hidden md:inline">Grid</span>
+      <div class="flex rounded-lg bg-ink-950 p-0.5 border border-ink-700" role="group" aria-label="Grid size">
+        <button type="button" class="seg on" data-grid="32" id="btn-grid-32">32 x 32</button>
+        <button type="button" class="seg" data-grid="48" id="btn-grid-48">48 x 48</button>
+      </div>
+
+      <button type="button" id="btn-grid-lines" class="seg on border border-ink-700" title="Toggle grid lines" aria-pressed="true">
+        Grid lines
+      </button>
+
+      <label class="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400">
+        Zoom
+        <select id="sel-zoom" class="bg-ink-950 border border-ink-700 rounded-md px-1.5 py-1 text-xs text-slate-200">
+          <option value="0.75">75%</option>
+          <option value="1" selected>100%</option>
+          <option value="1.25">125%</option>
+          <option value="1.5">150%</option>
+          <option value="2">200%</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
+      <button type="button" id="btn-new" class="px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-300 hover:bg-ink-800">New</button>
+      <button type="button" id="btn-load" class="px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-300 hover:bg-ink-800">Load JSON</button>
+      <button type="button" id="btn-export-json" class="px-2.5 py-1.5 rounded-md text-xs font-medium bg-ink-800 border border-ink-700 hover:border-quest-400">JSON</button>
+      <button type="button" id="btn-export-png" class="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-quest-400 text-ink-950 hover:bg-quest-300">PNG</button>
+      <input id="file-json" type="file" accept="application/json,.json" class="hidden" />
+    </div>
+  </header>
+
+  <div class="app-shell flex flex-1 min-h-0">
+    <aside class="side-left w-64 flex-shrink-0 border-r border-ink-700 bg-ink-900 flex flex-col min-h-0">
+      <div class="px-3 py-3 border-b border-ink-700 flex items-center justify-between">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Sprites</h2>
+        <button type="button" id="btn-upload" class="px-2 py-1 rounded-md text-[11px] font-medium bg-ink-800 border border-ink-700 hover:border-quest-400">Upload</button>
+        <input id="file-images" type="file" accept="image/*" multiple class="hidden" />
+      </div>
+      <div id="sprite-drop" class="mx-3 mt-3 rounded-md border border-dashed border-ink-700 px-2 py-2 text-[11px] text-slate-500 text-center">
+        Drop images here, or drag a shape onto the grid
+      </div>
+      <div id="palette" class="sidebar-scroll flex-1 overflow-auto p-3 space-y-3"></div>
+    </aside>
+
+    <main class="flex-1 min-w-0 min-h-0 flex flex-col bg-ink-950">
+      <div id="workspace" class="flex-1 overflow-auto">
+        <div id="board-wrap">
+          <div id="board" tabindex="0" role="application" aria-label="Layout grid">
+            <div id="layer-background" class="layer"></div>
+            <div id="layer-middle" class="layer"></div>
+            <div id="layer-foreground" class="layer"></div>
+            <div id="hover-preview"></div>
+            <div id="grid-lines"></div>
+            <div id="selection"></div>
+            <div id="empty-hint" class="empty-hint">Drag a sprite onto the grid to start a layout</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="side-right w-72 flex-shrink-0 border-l border-ink-700 bg-ink-900 flex flex-col min-h-0">
+      <div class="px-3 py-3 border-b border-ink-700">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Layers</h2>
+        <p class="text-[11px] text-slate-500 mt-1">Place on the active layer. Hide or lock while you work.</p>
+      </div>
+      <div id="layer-list" class="p-3 space-y-2"></div>
+
+      <div class="px-3 pt-1 pb-2">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Inspector</h2>
+      </div>
+      <div id="inspector" class="flex-1 overflow-auto sidebar-scroll px-3 pb-3"></div>
+
+      <div class="p-3 border-t border-ink-700 text-[11px] text-slate-500 space-y-1.5">
+        <p><kbd>Esc</kbd> deselect &nbsp; <kbd>Del</kbd> delete</p>
+        <p><kbd>Ctrl</kbd>+<kbd>Z</kbd> undo &nbsp; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> redo</p>
+        <p>Arrows nudge &nbsp; <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate</p>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="flex-shrink-0 h-8 px-3 sm:px-4 flex items-center gap-3 border-t border-ink-700 bg-ink-900 text-[11px] font-mono text-slate-500">
+    <span id="status-grid">32 x 32</span>
+    <span class="text-ink-700">|</span>
+    <span id="status-hover">Hover: -</span>
+    <span class="text-ink-700">|</span>
+    <span id="status-sel" class="truncate">No selection</span>
+    <span id="status-stamp" class="ml-auto text-quest-300 truncate"></span>
+  </footer>
+
+  <div id="toast" role="status"></div>
+  <div id="drag-ghost" aria-hidden="true"></div>
+  <script src="./app.js"></script>
+</body>
+</html>

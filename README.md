@@ -13,7 +13,8 @@ Tile-based visual layout mockup tool for Snack Quests and other indie game UI wo
 ### Grid and workspace
 - Choose **32 x 32 grid** or **48 x 48 grid** in the toolbar.
 - Toggle grid lines with the grid button.
-- Zoom in and out. The workspace scrolls when the board is larger than the viewport.
+- Zoom in and out from the toolbar on every screen size. Click the **100%** label to reset zoom. Zoom only scales the workspace view.
+- The status bar (and the toolbar on wide screens) shows **View** size (24 px per tile) and **Export** size (32 px per tile). A 32 x 32 board is 768 x 768 px on screen and 1024 x 1024 px in the PNG. A 48 x 48 board is 1152 x 1152 px on screen and 1536 x 1536 px in the PNG.
 
 ### Layers
 Three stacked layers: **Background**, **Middle**, **Foreground**.
@@ -25,12 +26,13 @@ Three stacked layers: **Background**, **Middle**, **Foreground**.
 ### Sprites
 The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, triangle, panel frame, button, diamond, hexagon, badge, bar, item slot, window, terrain, pip).
 
-- Upload PNG, SVG, or WebP images, or drop files on the upload zone.
-- Click a sprite, then click the grid to stamp it on the **active** layer (snaps to tiles).
-- Drag a sprite from the sidebar onto the grid to place it.
+- Upload PNG, SVG, or WebP images, or drop files on the upload zone. Uploaded sprites appear under **Uploads**.
+- Click a sprite to enter stamp mode (card highlight, "Click the grid to place" hint). Then click the grid to stamp it on the **active** layer (snaps to tiles, stacks over existing items).
+- Drag a sprite from the sidebar onto the grid. A ghost preview follows the pointer. Release to place.
+- Click the same sprite again, or press **Escape**, to leave stamp mode.
 
 ### Edit placed sprites
-- Click to select. Drag to move (tile snap). Drag the honey-colored handles to resize across tiles.
+- Click to select (when not in stamp mode). Drag to move (tile snap). Drag the honey-colored handles to resize across tiles.
 - Inspector fields edit X, Y, W, H in tiles. Send back / Bring front changes stacking inside the layer.
 - **Delete** or **Backspace** removes the selection. The trash control in the inspector does the same.
 - **Escape** clears the selection and stamp tool.

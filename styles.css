@@ -1,5 +1,5 @@
 :root {
-  --tile: 20px;
+  --tile: 24px;
   --ink: #0b0d12;
   --panel: #12161f;
   --raised: #181d28;
@@ -47,6 +47,26 @@ body {
   text-align: center;
 }
 
+.stamp-banner {
+  position: sticky;
+  top: 10px;
+  z-index: 50;
+  display: inline-flex;
+  margin: 10px auto 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--honey);
+  background: rgba(18, 22, 31, 0.92);
+  color: var(--honey);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.stamp-banner[hidden] {
+  display: none;
+}
+
 #board-wrap {
   display: inline-block;
   padding: 48px;
@@ -71,6 +91,13 @@ body {
     0 24px 60px rgba(0, 0, 0, 0.45);
   touch-action: none;
   user-select: none;
+}
+
+#board.stamping {
+  box-shadow:
+    0 0 0 2px var(--honey),
+    0 24px 60px rgba(0, 0, 0, 0.45);
+  cursor: copy;
 }
 
 #board.show-grid::after {
@@ -164,7 +191,16 @@ body {
   border-radius: 10px;
   cursor: grab;
   touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
   transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sprite-card img,
+.sprite-card svg {
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .sprite-card:hover {

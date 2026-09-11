@@ -1,5 +1,6 @@
 (() => {
   const TILE = 24;
+  const EXPORT_TILE = 32;
   const LAYER_ORDER = ["background", "middle", "foreground"];
   const LAYER_META = {
     background: { name: "Background", accent: "#5b8def" },
@@ -44,6 +45,8 @@
     zoomIn: document.getElementById("zoom-in"),
     zoomOut: document.getElementById("zoom-out"),
     zoomLabel: document.getElementById("zoom-label"),
+    sizeReadout: document.getElementById("size-readout"),
+    stampBanner: document.getElementById("stamp-banner"),
     exportPng: document.getElementById("export-png"),
     exportJson: document.getElementById("export-json"),
     loadSample: document.getElementById("load-sample"),
@@ -194,7 +197,22 @@
   }
 
   function defaultSize(sprite) {
+    if (!sprite) return { w: 4, h: 4 };
     return { w: sprite.w || 4, h: sprite.h || 4 };
+  }
+
+  function viewPixels() {
+    return state.gridSize * TILE;
+  }
+
+  function exportPixels() {
+    return state.gridSize * EXPORT_TILE;
+  }
+
+  function sizeReadoutText() {
+    const view = viewPixels();
+    const exported = exportPixels();
+    return `View ${view} x ${view} px. Export ${exported} x ${exported} px`;
   }
 
   function clampItem(item, grid) {
@@ -206,9 +224,13 @@
 
   function eventToBoard(e) {
     const rect = els.board.getBoundingClientRect();
-    const visual = TILE * state.zoom;
-    const fx = (e.clientX - rect.left) / visual;
-    const fy = (e.clientY - rect.top) / visual;
+    const width = rect.width;
+    const height = rect.height;
+    if (width <= 0 || height <= 0) {
+      return { fx: -1, fy: -1, x: -1, y: -1, inside: false };
+    }
+    const fx = ((e.clientX - rect.left) / width) * state.gridSize;
+    const fy = ((e.clientY - rect.top) / height) * state.gridSize;
     return {
       fx,
       fy,
@@ -216,6 +238,29 @@
       y: Math.floor(fy),
       inside: fx >= 0 && fy >= 0 && fx < state.gridSize && fy < state.gridSize,
     };
+  }
+
+  function ghostForSprite(spriteId, e) {
+    const sprite = spriteById(spriteId);
+    const pos = eventToBoard(e);
+    if (!sprite || !pos.inside) {
+      hideGhost();
+      return;
+    }
+    const size = defaultSize(sprite);
+    const x = clamp(pos.x, 0, state.gridSize - size.w);
+    const y = clamp(pos.y, 0, state.gridSize - size.h);
+    showGhost(x, y, size.w, size.h);
+  }
+
+  function placeSpriteAtEvent(spriteId, e) {
+    const sprite = spriteById(spriteId);
+    const pos = eventToBoard(e);
+    if (!sprite || !pos.inside) return null;
+    const size = defaultSize(sprite);
+    const x = clamp(pos.x, 0, state.gridSize - size.w);
+    const y = clamp(pos.y, 0, state.gridSize - size.h);
+    return placeSprite(spriteId, x, y, size);
   }
 
   function hitTest(layerId, fx, fy) {
@@ -303,6 +348,7 @@
     els.boardWrap.style.width = `${size + 96}px`;
     els.boardWrap.style.height = `${size + 96}px`;
     els.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+    if (els.sizeReadout) els.sizeReadout.textContent = `Export ${exportPixels()} x ${exportPixels()} px`;
     els.toggleGrid.classList.toggle("on", state.showGrid);
     els.toggleGrid.setAttribute("aria-pressed", String(state.showGrid));
   }
@@ -351,17 +397,19 @@
     } else {
       els.uploadsWrap.classList.remove("hidden");
       els.uploads.innerHTML = state.uploads
-        .map((up) => spriteCard(up.id, `<img alt="${escapeAttr(up.name)}" src="${up.src}" class="h-10 w-full object-contain" />`, up.name))
+        .map((up) => spriteCard(up.id, `<img alt="${escapeAttr(up.name)}" src="${up.src}" draggable="false" class="h-10 w-full object-contain" />`, up.name))
         .join("");
     }
-    els.stampHint.textContent = state.stampId ? "Stamping" : "";
+    els.stampHint.textContent = stampHintText();
+    syncStampClass();
   }
 
   function spriteCard(id, preview, name) {
     const active = state.stampId === id ? " active" : "";
-    return `<button type="button" class="sprite-card${active} px-2 py-2 text-left" data-sprite="${id}" title="Drag onto the grid or click, then click a tile">
-      <div class="mb-1 flex h-12 items-center justify-center">${preview}</div>
-      <div class="truncate text-[10px] font-medium text-mist">${escapeAttr(name)}</div>
+    const pressed = state.stampId === id ? "true" : "false";
+    return `<button type="button" class="sprite-card${active} px-2 py-2 text-left" data-sprite="${id}" aria-pressed="${pressed}" title="Click to stamp, or drag onto the grid">
+      <div class="mb-1 flex h-12 items-center justify-center pointer-events-none">${preview}</div>
+      <div class="truncate text-[10px] font-medium text-mist pointer-events-none">${escapeAttr(name)}</div>
     </button>`;
   }
 
@@ -456,11 +504,19 @@
   function renderStatus() {
     const rec = selectedRecord();
     const hover = state.hoverTile;
-    const tileText = hover ? `Tile ${hover.x}, ${hover.y}` : "Tile -, -";
-    const extra = rec ? `  |  ${rec.item.w} x ${rec.item.h} at ${rec.item.x}, ${rec.item.y}` : hoverItemId ? "  |  click to select" : "";
-    els.statusLeft.textContent = tileText + extra;
+    const stamp = state.stampId ? spriteById(state.stampId) : null;
+    let tileText = hover ? `Tile ${hover.x}, ${hover.y}` : "Tile -, -";
+    if (stamp) {
+      const size = defaultSize(stamp);
+      tileText = `${stampHintText()} (${size.w} x ${size.h} tiles)` + (hover ? `  |  ${tileText}` : "");
+    } else if (rec) {
+      tileText += `  |  ${rec.item.w} x ${rec.item.h} at ${rec.item.x}, ${rec.item.y}`;
+    } else if (hoverItemId) {
+      tileText += "  |  click to select";
+    }
+    els.statusLeft.textContent = tileText;
     const counts = LAYER_ORDER.map((id) => state.layers[id].items.length).reduce((a, b) => a + b, 0);
-    els.statusRight.textContent = `${state.gridSize} x ${state.gridSize}  |  ${LAYER_META[state.activeLayer].name}  |  ${counts} items  |  Esc deselects, Delete removes, Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Y redoes`;
+    els.statusRight.textContent = `${sizeReadoutText()}  |  ${LAYER_META[state.activeLayer].name}  |  ${counts} items`;
   }
 
   function renderAll() {
@@ -513,12 +569,32 @@
     toast("Deleted sprite");
   }
 
+  function stampHintText() {
+    if (!state.stampId) return "";
+    const sprite = spriteById(state.stampId);
+    const name = sprite?.name || "sprite";
+    return `Click the grid to place ${name}`;
+  }
+
+  function syncStampClass() {
+    els.board.classList.toggle("stamping", Boolean(state.stampId));
+    if (els.stampBanner) {
+      const hint = stampHintText();
+      els.stampBanner.hidden = !hint;
+      els.stampBanner.textContent = hint || "Click the grid to place";
+    }
+  }
+
   function syncStampUI() {
     document.querySelectorAll("[data-sprite]").forEach((el) => {
-      el.classList.toggle("active", el.dataset.sprite === state.stampId);
+      const on = el.dataset.sprite === state.stampId;
+      el.classList.toggle("active", on);
+      el.setAttribute("aria-pressed", String(on));
     });
-    els.stampHint.textContent = state.stampId ? "Stamping" : "";
+    els.stampHint.textContent = stampHintText();
     els.board.style.cursor = state.stampId ? "copy" : "default";
+    syncStampClass();
+    renderStatus();
   }
 
   function showGhost(x, y, w, h) {
@@ -816,7 +892,7 @@
   }
 
   async function exportPNG() {
-    const unit = 32;
+    const unit = EXPORT_TILE;
     const canvas = document.createElement("canvas");
     canvas.width = state.gridSize * unit;
     canvas.height = state.gridSize * unit;
@@ -925,7 +1001,7 @@
     if (e.button !== 0) return;
     const pos = eventToBoard(e);
     const handle = e.target.closest?.(".handle");
-    if (handle && state.selectedId) {
+    if (handle && state.selectedId && !state.stampId) {
       const rec = selectedRecord();
       if (!rec || !canEditLayer(rec.layerId)) return;
       checkpoint();
@@ -940,6 +1016,12 @@
       return;
     }
 
+    if (state.stampId && pos.inside) {
+      placeSpriteAtEvent(state.stampId, e);
+      e.preventDefault();
+      return;
+    }
+
     const hit = pos.inside ? hitTestAll(pos.fx, pos.fy) : null;
     if (hit) {
       state.activeLayer = hit.layerId;
@@ -949,6 +1031,7 @@
       renderLayers();
       renderItems();
       renderInspector();
+      syncStampUI();
       if (canEditLayer(hit.layerId)) {
         checkpoint();
         interaction = {
@@ -960,16 +1043,6 @@
         };
         els.board.setPointerCapture(e.pointerId);
       }
-      e.preventDefault();
-      return;
-    }
-
-    if (state.stampId && pos.inside) {
-      const sprite = spriteById(state.stampId);
-      const size = defaultSize(sprite);
-      const x = clamp(pos.x, 0, state.gridSize - size.w);
-      const y = clamp(pos.y, 0, state.gridSize - size.h);
-      placeSprite(state.stampId, x, y, size);
       e.preventDefault();
       return;
     }
@@ -990,11 +1063,7 @@
 
     if (!interaction) {
       if (state.stampId && pos.inside) {
-        const sprite = spriteById(state.stampId);
-        const size = defaultSize(sprite);
-        const x = clamp(pos.x, 0, state.gridSize - size.w);
-        const y = clamp(pos.y, 0, state.gridSize - size.h);
-        showGhost(x, y, size.w, size.h);
+        ghostForSprite(state.stampId, e);
       } else {
         hideGhost();
       }
@@ -1044,6 +1113,11 @@
     e.preventDefault();
     const spriteId = card.dataset.sprite;
     if (!spriteById(spriteId)) return;
+    try {
+      card.setPointerCapture(e.pointerId);
+    } catch (_) {
+      /* capture is optional */
+    }
     interaction = {
       type: "palette",
       spriteId,
@@ -1053,35 +1127,25 @@
       wasStamp: state.stampId === spriteId,
     };
     state.stampId = spriteId;
+    state.selectedId = null;
+    renderItems();
+    renderInspector();
     syncStampUI();
   }
 
   function onPalettePointerMove(e) {
     if (interaction?.type !== "palette") return;
-    const pos = eventToBoard(e);
     if (Math.hypot(e.clientX - interaction.startX, e.clientY - interaction.startY) > 6) {
       interaction.dragging = true;
     }
-    if (pos.inside) {
-      const sprite = spriteById(interaction.spriteId);
-      const size = defaultSize(sprite);
-      const x = clamp(pos.x, 0, state.gridSize - size.w);
-      const y = clamp(pos.y, 0, state.gridSize - size.h);
-      showGhost(x, y, size.w, size.h);
-    } else {
-      hideGhost();
-    }
+    ghostForSprite(interaction.spriteId, e);
   }
 
   function onPalettePointerUp(e) {
     if (interaction?.type !== "palette") return;
     const pos = eventToBoard(e);
     if (interaction.dragging && pos.inside) {
-      const sprite = spriteById(interaction.spriteId);
-      const size = defaultSize(sprite);
-      const x = clamp(pos.x, 0, state.gridSize - size.w);
-      const y = clamp(pos.y, 0, state.gridSize - size.h);
-      placeSprite(interaction.spriteId, x, y, size);
+      placeSpriteAtEvent(interaction.spriteId, e);
     } else if (!interaction.dragging && interaction.wasStamp) {
       state.stampId = null;
       syncStampUI();
@@ -1103,6 +1167,10 @@
   });
   els.zoomOut.addEventListener("click", () => {
     state.zoom = clamp(Math.round((state.zoom - 0.25) * 100) / 100, 0.5, 2);
+    renderBoardFrame();
+  });
+  els.zoomLabel.addEventListener("click", () => {
+    state.zoom = 1;
     renderBoardFrame();
   });
   els.exportPng.addEventListener("click", () => {
@@ -1129,10 +1197,23 @@
 
   els.builtin.addEventListener("pointerdown", onPalettePointerDown);
   els.uploads.addEventListener("pointerdown", onPalettePointerDown);
+  els.builtin.addEventListener("dragstart", (e) => e.preventDefault());
+  els.uploads.addEventListener("dragstart", (e) => e.preventDefault());
   window.addEventListener("pointermove", onPalettePointerMove);
   window.addEventListener("pointerup", onPalettePointerUp);
+  window.addEventListener("pointercancel", onPalettePointerUp);
 
   els.board.addEventListener("pointerdown", onPointerDownBoard);
+  els.board.addEventListener("dragover", (e) => {
+    if (!state.stampId) return;
+    e.preventDefault();
+    ghostForSprite(state.stampId, e);
+  });
+  els.board.addEventListener("drop", (e) => {
+    e.preventDefault();
+    if (state.stampId) placeSpriteAtEvent(state.stampId, e);
+    hideGhost();
+  });
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
   window.addEventListener("pointercancel", onPointerUp);
@@ -1183,10 +1264,10 @@
     if (e.key === "Escape") {
       state.selectedId = null;
       state.stampId = null;
-      els.board.style.cursor = "default";
       renderPalette();
       renderItems();
       renderInspector();
+      syncStampUI();
       return;
     }
     if (editingField()) return;

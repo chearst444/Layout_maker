@@ -78,7 +78,7 @@
   </head>
   <body class="h-screen overflow-hidden bg-ink text-slate-100 antialiased">
     <div class="flex h-full flex-col">
-      <header class="flex h-14 shrink-0 items-center gap-3 border-b border-ink-line bg-ink-panel px-3 md:px-4">
+      <header class="flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-ink-line bg-ink-panel px-3 md:gap-3 md:px-4">
         <div class="flex min-w-0 items-center gap-3">
           <div class="grid h-8 w-8 shrink-0 grid-cols-2 gap-0.5 rounded-lg bg-ink-raised p-1 ring-1 ring-ink-line">
             <span class="rounded-sm bg-[#5b8def]"></span>
@@ -150,10 +150,24 @@
         </div>
 
         <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <div class="hidden items-center rounded-lg border border-ink-line bg-ink-raised p-0.5 md:flex">
+          <div class="flex shrink-0 items-center rounded-lg border border-ink-line bg-ink-raised p-0.5">
             <button id="zoom-out" class="icon-btn h-7 w-7" type="button" title="Zoom out">-</button>
-            <span id="zoom-label" class="mono min-w-[3.2rem] text-center text-[11px] text-mist">100%</span>
+            <button
+              id="zoom-label"
+              class="mono min-w-[3.2rem] rounded px-1 text-center text-[11px] text-mist hover:text-slate-100"
+              type="button"
+              title="Reset zoom to 100%"
+            >
+              100%
+            </button>
             <button id="zoom-in" class="icon-btn h-7 w-7" type="button" title="Zoom in">+</button>
+          </div>
+          <div
+            id="size-readout"
+            class="hidden whitespace-nowrap mono text-[11px] text-mist lg:block"
+            title="Workspace view uses 24 px tiles. PNG export uses 32 px tiles. Zoom does not change export size."
+          >
+            Export 1024 x 1024 px
           </div>
           <button
             id="load-sample"
@@ -183,7 +197,7 @@
         <aside class="flex w-[220px] shrink-0 flex-col border-r border-ink-line bg-ink-panel md:w-[250px]">
           <div class="flex items-center justify-between px-3 py-3">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-mist">Sprites</h2>
-            <span id="stamp-hint" class="text-[10px] text-mist/80"></span>
+            <span id="stamp-hint" class="max-w-[9rem] text-right text-[10px] leading-tight text-honey"></span>
           </div>
           <label
             id="upload-zone"
@@ -208,6 +222,7 @@
         </aside>
 
         <main id="workspace" class="workspace app-scroll relative min-w-0 flex-1 overflow-auto">
+          <div id="stamp-banner" class="stamp-banner" hidden>Click the grid to place</div>
           <div id="board-wrap">
             <div id="board">
               <div id="layer-background" class="layer" data-layer="background"></div>
@@ -258,7 +273,7 @@
 
       <footer class="flex h-9 shrink-0 items-center justify-between gap-3 border-t border-ink-line bg-ink-panel px-3 text-[11px] text-mist">
         <div id="status-left" class="mono truncate">Tile -, -</div>
-        <div id="status-right" class="truncate">Esc deselects. Delete removes. Ctrl/Cmd+Z undoes. Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes.</div>
+        <div id="status-right" class="truncate">View 768 x 768 px. Export 1024 x 1024 px</div>
       </footer>
     </div>
     <div id="toast" role="status"></div>

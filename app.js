@@ -211,8 +211,8 @@
 
   function sizeReadoutText() {
     const view = viewPixels();
-    const exported = exportPixels();
-    return `View ${view} x ${view} px. Export ${exported} x ${exported} px`;
+    const image = exportPixels();
+    return `View ${view} x ${view} · Image ${image} x ${image}`;
   }
 
   function clampItem(item, grid) {
@@ -348,7 +348,7 @@
     els.boardWrap.style.width = `${size + 96}px`;
     els.boardWrap.style.height = `${size + 96}px`;
     els.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
-    if (els.sizeReadout) els.sizeReadout.textContent = `Export ${exportPixels()} x ${exportPixels()} px`;
+    if (els.sizeReadout) els.sizeReadout.textContent = `Image ${exportPixels()} x ${exportPixels()}`;
     els.toggleGrid.classList.toggle("on", state.showGrid);
     els.toggleGrid.setAttribute("aria-pressed", String(state.showGrid));
   }

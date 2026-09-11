@@ -14,7 +14,7 @@ Tile-based visual layout mockup tool for Snack Quests and other indie game UI wo
 - Choose **32 x 32 grid** or **48 x 48 grid** in the toolbar.
 - Toggle grid lines with the grid button.
 - Zoom in and out from the toolbar on every screen size. Click the **100%** label to reset zoom. Zoom only scales the workspace view.
-- The status bar (and the toolbar on wide screens) shows **View** size (24 px per tile) and **Export** size (32 px per tile). A 32 x 32 board is 768 x 768 px on screen and 1024 x 1024 px in the PNG. A 48 x 48 board is 1152 x 1152 px on screen and 1536 x 1536 px in the PNG.
+- The toolbar shows **Image** size (PNG pixels, 32 px per tile). The status bar also shows **View** size (24 px per tile at 100% zoom). A 32 x 32 board is 768 x 768 on screen and 1024 x 1024 in the PNG. A 48 x 48 board is 1152 x 1152 on screen and 1536 x 1536 in the PNG. Zoom does not change the image size.
 
 ### Layers
 Three stacked layers: **Background**, **Middle**, **Foreground**.

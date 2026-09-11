@@ -40,11 +40,12 @@ body {
   background: transparent;
 }
 
-.workspace {
-  background:
-    radial-gradient(1200px 500px at 50% -10%, rgba(232, 168, 56, 0.07), transparent 55%),
-    linear-gradient(180deg, #0e1118 0%, #0b0d12 100%);
-  text-align: center;
+.workspace.hand {
+  cursor: grab;
+}
+
+.workspace.hand.panning {
+  cursor: grabbing;
 }
 
 .stamp-banner {

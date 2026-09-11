@@ -14,6 +14,7 @@ Tile-based visual layout mockup tool for Snack Quests and other indie game UI wo
 - Choose **32 x 32 grid** or **48 x 48 grid** in the toolbar.
 - Toggle grid lines with the grid button.
 - Zoom in and out from the toolbar on every screen size. Click the **100%** label to reset zoom. Zoom only scales the workspace view.
+- Hold **Space** and drag on the workspace to pan the scene (cursor is grab / grabbing). Middle-mouse drag also pans. Releasing Space returns to select, stamp, or marquee. Space does not pan while a text field is focused.
 - The toolbar shows **Image** size (PNG pixels, 32 px per tile). The status bar also shows **View** size (24 px per tile at 100% zoom). A 32 x 32 board is 768 x 768 on screen and 1024 x 1024 in the PNG. A 48 x 48 board is 1152 x 1152 on screen and 1536 x 1536 in the PNG. Zoom does not change the image size.
 
 ### Layers
@@ -38,7 +39,7 @@ The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, tr
 - **Delete** or **Backspace** removes unlocked selected sprites. The trash control in the inspector does the same.
 - Resize handles appear when exactly one sprite is selected.
 - **Escape** clears the selection and stamp tool.
-- Arrow keys nudge one tile. Toolbar **Undo** and **Redo** buttons share the same history as **Ctrl/Cmd+Z**, **Ctrl/Cmd+Shift+Z**, and **Ctrl/Cmd+Y**. Buttons disable when there is nothing to undo or redo.
+- Arrow keys nudge the unlocked selection one tile. Toolbar **Undo** and **Redo** buttons share the same history as **Ctrl/Cmd+Z**, **Ctrl/Cmd+Shift+Z**, and **Ctrl/Cmd+Y**. Buttons disable when there is nothing to undo or redo.
 
 **Load sample** drops a small HUD mockup onto a 32 x 32 board so you can try hide, lock, move, and export immediately.
 
@@ -58,5 +59,6 @@ The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, tr
 
 ## Notes
 - Placement always targets the active layer. You cannot drop onto a hidden or locked active layer.
+- Stamp mode takes priority over marquee. Press Escape to leave stamp mode before dragging a selection box.
 - Switching from 48 x 48 down to 32 x 32 clamps any items that would sit outside the new bounds.
 - Tailwind is loaded from the CDN, so the browser needs network access the first time you open the page.

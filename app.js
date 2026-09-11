@@ -86,6 +86,7 @@
   let toastTimer = 0;
   let interaction = null;
   let hoverItemId = null;
+  let spaceHeld = false;
 
   function uid(prefix) {
     return `${prefix}-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
@@ -817,9 +818,27 @@
       el.setAttribute("aria-pressed", String(on));
     });
     els.stampHint.textContent = stampHintText();
-    els.board.style.cursor = state.stampId ? "copy" : "default";
+    updateToolCursor();
     syncStampClass();
     renderStatus();
+  }
+
+  function updateToolCursor() {
+    const panning = interaction?.type === "pan";
+    els.workspace.classList.toggle("hand", spaceHeld || panning);
+    els.workspace.classList.toggle("panning", panning);
+    if (panning) {
+      els.workspace.style.cursor = "grabbing";
+      els.board.style.cursor = "grabbing";
+      return;
+    }
+    if (spaceHeld) {
+      els.workspace.style.cursor = "grab";
+      els.board.style.cursor = "grab";
+      return;
+    }
+    els.workspace.style.cursor = "";
+    els.board.style.cursor = state.stampId ? "copy" : "default";
   }
 
   function showGhost(x, y, w, h) {
@@ -1246,7 +1265,37 @@
     return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
   }
 
+  function isSpaceKey(e) {
+    return e.code === "Space" || e.key === " " || e.key === "Spacebar";
+  }
+
+  function startPan(e) {
+    interaction = {
+      type: "pan",
+      lastX: e.clientX,
+      lastY: e.clientY,
+    };
+    try {
+      els.workspace.setPointerCapture(e.pointerId);
+    } catch (_) {
+      /* capture is optional */
+    }
+    updateToolCursor();
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function onPointerDownPan(e) {
+    if (editingField()) return;
+    if (interaction && interaction.type !== "pan") return;
+    const middle = e.button === 1;
+    const spaceDrag = e.button === 0 && spaceHeld;
+    if (!middle && !spaceDrag) return;
+    startPan(e);
+  }
+
   function onPointerDownBoard(e) {
+    if (spaceHeld) return;
     if (e.button !== 0) return;
     const pos = eventToBoard(e);
     const handle = e.target.closest?.(".handle");
@@ -1347,6 +1396,16 @@
       return;
     }
 
+    if (interaction.type === "pan") {
+      const dx = e.clientX - interaction.lastX;
+      const dy = e.clientY - interaction.lastY;
+      interaction.lastX = e.clientX;
+      interaction.lastY = e.clientY;
+      els.workspace.scrollLeft -= dx;
+      els.workspace.scrollTop -= dy;
+      return;
+    }
+
     if (interaction.type === "palette") return;
 
     if (interaction.type === "marquee") {
@@ -1390,6 +1449,11 @@
 
   function onPointerUp() {
     if (!interaction || interaction.type === "palette") return;
+    if (interaction.type === "pan") {
+      interaction = null;
+      updateToolCursor();
+      return;
+    }
     if (interaction.type === "marquee") {
       hideMarquee();
       if (interaction.dragging) {
@@ -1512,6 +1576,10 @@
   window.addEventListener("pointerup", onPalettePointerUp);
   window.addEventListener("pointercancel", onPalettePointerUp);
 
+  els.workspace.addEventListener("pointerdown", onPointerDownPan, true);
+  els.workspace.addEventListener("mousedown", (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
   els.board.addEventListener("pointerdown", onPointerDownBoard);
   els.board.addEventListener("dragover", (e) => {
     if (!state.stampId) return;
@@ -1558,6 +1626,15 @@
   });
 
   window.addEventListener("keydown", (e) => {
+    if (isSpaceKey(e)) {
+      if (editingField()) return;
+      e.preventDefault();
+      if (!spaceHeld) {
+        spaceHeld = true;
+        if (!interaction || interaction.type === "pan") updateToolCursor();
+      }
+      return;
+    }
     const meta = e.metaKey || e.ctrlKey;
     if (meta && e.key.toLowerCase() === "z") {
       e.preventDefault();
@@ -1602,6 +1679,21 @@
       renderInspector();
       renderStatus();
     }
+  });
+
+  window.addEventListener("keyup", (e) => {
+    if (!isSpaceKey(e)) return;
+    spaceHeld = false;
+    if (interaction?.type === "pan") {
+      interaction = null;
+    }
+    updateToolCursor();
+  });
+
+  window.addEventListener("blur", () => {
+    spaceHeld = false;
+    if (interaction?.type === "pan") interaction = null;
+    updateToolCursor();
   });
 
   renderAll();

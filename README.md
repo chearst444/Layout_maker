@@ -11,9 +11,11 @@ Tile-based visual layout mockup tool for Snack Quests and other indie game UI wo
 ## What you can do
 
 ### Grid and workspace
-- Choose **32 x 32 grid** or **48 x 48 grid** in the toolbar.
+- Choose a grid size in the toolbar: **32 x 32**, **48 x 48**, **48 x 27 landscape (16:9)**, or **64 x 36 landscape (16:9)**. Landscape presets are for backgrounds and wider mockups.
 - Toggle grid lines with the grid button.
-- Zoom in and out. The workspace scrolls when the board is larger than the viewport.
+- Zoom in and out from the toolbar on every screen size. Click the **100%** label to reset zoom. Zoom only scales the workspace view.
+- Hold **Space** and drag on the workspace to pan the scene (cursor is grab / grabbing). Middle-mouse drag also pans. Releasing Space returns to select, stamp, or marquee. Space does not pan while a text field is focused.
+- The toolbar shows **Image** size (PNG pixels, 32 px per tile). The status bar also shows **View** size (24 px per tile at 100% zoom) as `View Ww x Hh · Image Ew x Eh`. A 32 x 32 board is 768 x 768 on screen and 1024 x 1024 in the PNG. A 48 x 27 landscape board is 1152 x 648 on screen and 1536 x 864 in the PNG. A 64 x 36 landscape board is 1536 x 864 on screen and 2048 x 1152 in the PNG. Zoom does not change the image size.
 
 ### Layers
 Three stacked layers: **Background**, **Middle**, **Foreground**.
@@ -25,34 +27,38 @@ Three stacked layers: **Background**, **Middle**, **Foreground**.
 ### Sprites
 The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, triangle, panel frame, button, diamond, hexagon, badge, bar, item slot, window, terrain, pip).
 
-- Upload PNG, SVG, or WebP images, or drop files on the upload zone.
-- Click a sprite, then click the grid to stamp it on the **active** layer (snaps to tiles).
-- Drag a sprite from the sidebar onto the grid to place it.
+- Upload PNG, SVG, or WebP images, or drop files on the upload zone. Uploaded sprites appear under **Uploads**.
+- Click a sprite to enter stamp mode (card highlight, "Click the grid to place" hint). Then click the grid to stamp it on the **active** layer (snaps to tiles, stacks over existing items).
+- Drag a sprite from the sidebar onto the grid. A ghost preview follows the pointer. Release to place.
+- Click the same sprite again, or press **Escape**, to leave stamp mode.
 
 ### Edit placed sprites
-- Click to select. Drag to move (tile snap). Drag the honey-colored handles to resize across tiles.
+- Click to select (when not in stamp mode). Shift-click adds or removes a sprite from the selection. Drag empty board space to draw a marquee. Visible sprites whose tiles intersect the box are selected (locked items can be selected, but move, transform, and delete skip them). Drag any selected unlocked sprite to move the whole unlocked group, snapped and clamped on the grid.
 - Inspector fields edit X, Y, W, H in tiles. Send back / Bring front changes stacking inside the layer.
-- **Delete** or **Backspace** removes the selection. The trash control in the inspector does the same.
+- **Flip H**, **Flip V**, **Rotate left**, and **Rotate right** (90 degrees) transform every unlocked selected sprite. 90 / 270 rotation swaps width and height and keeps each item on the grid when possible. Locked items in a mixed selection are skipped.
+- **Delete** or **Backspace** removes unlocked selected sprites. The trash control in the inspector does the same.
+- Resize handles appear when exactly one sprite is selected.
 - **Escape** clears the selection and stamp tool.
-- Arrow keys nudge one tile. **Ctrl/Cmd+Z** undoes. **Ctrl/Cmd+Shift+Z** or **Ctrl/Cmd+Y** redoes.
+- Arrow keys nudge the unlocked selection one tile. Toolbar **Undo** and **Redo** buttons share the same history as **Ctrl/Cmd+Z**, **Ctrl/Cmd+Shift+Z**, and **Ctrl/Cmd+Y**. Buttons disable when there is nothing to undo or redo.
 
 **Load sample** drops a small HUD mockup onto a 32 x 32 board so you can try hide, lock, move, and export immediately.
 
 ## Export
 
 ### PNG
-**Export PNG** rasterizes currently **visible** layers (hidden layers are skipped). Grid lines are included **only if the grid is currently shown**. If you hide the grid first, the PNG has no grid overlay. Export resolution is 32 pixels per tile.
+**Export PNG** rasterizes currently **visible** layers (hidden layers are skipped). Grid lines are included **only if the grid is currently shown**. If you hide the grid first, the PNG has no grid overlay. Image size is 32 pixels per tile (1024 x 1024 for 32 x 32, 1536 x 864 for 48 x 27 landscape, 2048 x 1152 for 64 x 36 landscape). Zoom does not change the image size.
 
 ### JSON
 **Export JSON** writes layer structure with tile coordinates:
 
 - `grid.cols` / `grid.rows`
 - each layer: `id`, `name`, `visible`, `locked`, `items`
-- each item: `id`, `x`, `y`, `width`, `height` (tiles), `sprite` (`id`, `type`, `source`)
+- each item: `id`, `x`, `y`, `width`, `height` (tiles), `flipX`, `flipY`, `rotation` (0, 90, 180, or 270), `sprite` (`id`, `type`, `source`)
 
 `type` is `shape` or `image`. For shapes, `source` is the shape key (for example `panel`). For uploads, `source` is the original filename. Image pixels are not embedded in the JSON.
 
 ## Notes
 - Placement always targets the active layer. You cannot drop onto a hidden or locked active layer.
-- Switching from 48 x 48 down to 32 x 32 clamps any items that would sit outside the new bounds.
+- Stamp mode takes priority over marquee. Press Escape to leave stamp mode before dragging a selection box.
+- Switching to a smaller or shorter grid clamps any items that would sit outside the new bounds.
 - Tailwind is loaded from the CDN, so the browser needs network access the first time you open the page.

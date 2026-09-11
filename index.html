@@ -78,7 +78,7 @@
   </head>
   <body class="h-screen overflow-hidden bg-ink text-slate-100 antialiased">
     <div class="flex h-full flex-col">
-      <header class="flex h-14 shrink-0 items-center gap-3 border-b border-ink-line bg-ink-panel px-3 md:px-4">
+      <header class="flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-ink-line bg-ink-panel px-3 md:gap-3 md:px-4">
         <div class="flex min-w-0 items-center gap-3">
           <div class="grid h-8 w-8 shrink-0 grid-cols-2 gap-0.5 rounded-lg bg-ink-raised p-1 ring-1 ring-ink-line">
             <span class="rounded-sm bg-[#5b8def]"></span>
@@ -101,8 +101,10 @@
             class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-xs font-medium text-slate-100 outline-none ring-honey focus:ring-1"
             title="Grid dimensions"
           >
-            <option value="32">32 x 32 grid</option>
-            <option value="48">48 x 48 grid</option>
+            <option value="32x32" selected>32 x 32 grid</option>
+            <option value="48x48">48 x 48 grid</option>
+            <option value="48x27">48 x 27 landscape (16:9)</option>
+            <option value="64x36">64 x 36 landscape (16:9)</option>
           </select>
         </label>
 
@@ -118,11 +120,57 @@
           </svg>
         </button>
 
+        <div class="flex shrink-0 items-center gap-1">
+          <button
+            id="undo-btn"
+            class="history-btn"
+            type="button"
+            title="Undo (Ctrl/Cmd+Z)"
+            aria-label="Undo"
+            disabled
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M9 14H4v-5" />
+              <path d="M4 9a9 9 0 1 1-1.15 6" />
+            </svg>
+            <span>Undo</span>
+          </button>
+          <button
+            id="redo-btn"
+            class="history-btn"
+            type="button"
+            title="Redo (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y)"
+            aria-label="Redo"
+            disabled
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M15 14h5v-5" />
+              <path d="M20 9a9 9 0 1 0 1.15 6" />
+            </svg>
+            <span>Redo</span>
+          </button>
+        </div>
+
         <div class="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <div class="hidden items-center rounded-lg border border-ink-line bg-ink-raised p-0.5 md:flex">
+          <div class="flex shrink-0 items-center rounded-lg border border-ink-line bg-ink-raised p-0.5">
             <button id="zoom-out" class="icon-btn h-7 w-7" type="button" title="Zoom out">-</button>
-            <span id="zoom-label" class="mono min-w-[3.2rem] text-center text-[11px] text-mist">100%</span>
+            <button
+              id="zoom-label"
+              class="mono min-w-[3.2rem] rounded px-1 text-center text-[11px] text-mist hover:text-slate-100"
+              type="button"
+              title="Reset zoom to 100%"
+              aria-label="Reset zoom to 100%"
+            >
+              100%
+            </button>
             <button id="zoom-in" class="icon-btn h-7 w-7" type="button" title="Zoom in">+</button>
+          </div>
+          <div
+            id="size-readout"
+            class="shrink-0 whitespace-nowrap mono text-[11px] text-mist"
+            title="On-screen view is 24 px per tile. PNG image size is 32 px per tile. Zoom does not change the image size."
+          >
+            Image 1024 x 1024
           </div>
           <button
             id="load-sample"
@@ -152,7 +200,7 @@
         <aside class="flex w-[220px] shrink-0 flex-col border-r border-ink-line bg-ink-panel md:w-[250px]">
           <div class="flex items-center justify-between px-3 py-3">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-mist">Sprites</h2>
-            <span id="stamp-hint" class="text-[10px] text-mist/80"></span>
+            <span id="stamp-hint" class="max-w-[9rem] text-right text-[10px] leading-tight text-honey"></span>
           </div>
           <label
             id="upload-zone"
@@ -177,12 +225,14 @@
         </aside>
 
         <main id="workspace" class="workspace app-scroll relative min-w-0 flex-1 overflow-auto">
+          <div id="stamp-banner" class="stamp-banner" hidden>Click the grid to place</div>
           <div id="board-wrap">
             <div id="board">
               <div id="layer-background" class="layer" data-layer="background"></div>
               <div id="layer-middle" class="layer" data-layer="middle"></div>
               <div id="layer-foreground" class="layer" data-layer="foreground"></div>
               <div id="ghost"></div>
+              <div id="marquee"></div>
               <div id="selection">
                 <div class="handle nw" data-handle="nw"></div>
                 <div class="handle n" data-handle="n"></div>
@@ -227,7 +277,7 @@
 
       <footer class="flex h-9 shrink-0 items-center justify-between gap-3 border-t border-ink-line bg-ink-panel px-3 text-[11px] text-mist">
         <div id="status-left" class="mono truncate">Tile -, -</div>
-        <div id="status-right" class="truncate">Esc deselects. Delete removes. Ctrl/Cmd+Z undoes.</div>
+        <div id="status-right" class="truncate">View 768 x 768 · Image 1024 x 1024</div>
       </footer>
     </div>
     <div id="toast" role="status"></div>

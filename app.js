@@ -1,5 +1,12 @@
 (() => {
   const TILE = 24;
+  const EXPORT_TILE = 32;
+  const GRID_PRESETS = {
+    "32x32": { w: 32, h: 32 },
+    "48x48": { w: 48, h: 48 },
+    "48x27": { w: 48, h: 27 },
+    "64x36": { w: 64, h: 36 },
+  };
   const LAYER_ORDER = ["background", "middle", "foreground"];
   const LAYER_META = {
     background: { name: "Background", accent: "#5b8def" },
@@ -29,6 +36,7 @@
     boardWrap: document.getElementById("board-wrap"),
     workspace: document.getElementById("workspace"),
     ghost: document.getElementById("ghost"),
+    marquee: document.getElementById("marquee"),
     selection: document.getElementById("selection"),
     builtin: document.getElementById("sprite-builtin"),
     uploads: document.getElementById("sprite-uploads"),
@@ -39,9 +47,13 @@
     statusRight: document.getElementById("status-right"),
     gridSize: document.getElementById("grid-size"),
     toggleGrid: document.getElementById("toggle-grid"),
+    undo: document.getElementById("undo-btn"),
+    redo: document.getElementById("redo-btn"),
     zoomIn: document.getElementById("zoom-in"),
     zoomOut: document.getElementById("zoom-out"),
     zoomLabel: document.getElementById("zoom-label"),
+    sizeReadout: document.getElementById("size-readout"),
+    stampBanner: document.getElementById("stamp-banner"),
     exportPng: document.getElementById("export-png"),
     exportJson: document.getElementById("export-json"),
     loadSample: document.getElementById("load-sample"),
@@ -58,11 +70,12 @@
   };
 
   const state = {
-    gridSize: 32,
+    gridW: 32,
+    gridH: 32,
     showGrid: true,
     zoom: 1,
     activeLayer: "middle",
-    selectedId: null,
+    selectedIds: [],
     stampId: null,
     hoverTile: null,
     layers: {
@@ -80,6 +93,7 @@
   let toastTimer = 0;
   let interaction = null;
   let hoverItemId = null;
+  let spaceHeld = false;
 
   function uid(prefix) {
     return `${prefix}-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
@@ -89,9 +103,36 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function gridKey(w, h) {
+    return `${w}x${h}`;
+  }
+
+  function parseGridValue(value) {
+    if (value && GRID_PRESETS[value]) return { ...GRID_PRESETS[value] };
+    const asNum = Number(value);
+    if (Number.isFinite(asNum) && asNum > 0) return { w: asNum, h: asNum };
+    const match = String(value || "").match(/^(\d+)\s*x\s*(\d+)$/i);
+    if (match) {
+      const w = Number(match[1]);
+      const h = Number(match[2]);
+      if (w > 0 && h > 0) return { w, h };
+    }
+    return { w: 32, h: 32 };
+  }
+
+  function applyGridDims(w, h) {
+    state.gridW = w;
+    state.gridH = h;
+    const key = gridKey(w, h);
+    if ([...els.gridSize.options].some((opt) => opt.value === key)) {
+      els.gridSize.value = key;
+    }
+  }
+
   function snapshot() {
     return {
-      gridSize: state.gridSize,
+      gridW: state.gridW,
+      gridH: state.gridH,
       layers: clone(state.layers),
     };
   }
@@ -100,13 +141,20 @@
     history.push(snapshot());
     if (history.length > MAX_HISTORY) history.shift();
     future.length = 0;
+    syncHistoryButtons();
+  }
+
+  function syncHistoryButtons() {
+    els.undo.disabled = !history.length;
+    els.redo.disabled = !future.length;
   }
 
   function restore(snap) {
-    state.gridSize = snap.gridSize;
+    const w = snap.gridW ?? snap.gridSize ?? 32;
+    const h = snap.gridH ?? snap.gridSize ?? 32;
+    applyGridDims(w, h);
     state.layers = clone(snap.layers);
-    if (!findItem(state.selectedId)) state.selectedId = null;
-    els.gridSize.value = String(state.gridSize);
+    state.selectedIds = state.selectedIds.filter((id) => findItem(id));
     renderAll();
   }
 
@@ -153,7 +201,39 @@
   }
 
   function selectedRecord() {
-    return findItem(state.selectedId);
+    return findItem(state.selectedIds[state.selectedIds.length - 1]);
+  }
+
+  function selectedRecords() {
+    return state.selectedIds.map(findItem).filter(Boolean);
+  }
+
+  function editableSelected() {
+    return selectedRecords().filter((rec) => canEditLayer(rec.layerId));
+  }
+
+  function isSelected(id) {
+    return state.selectedIds.includes(id);
+  }
+
+  function setSelection(ids) {
+    const next = [];
+    for (const id of ids) {
+      if (id && !next.includes(id) && findItem(id)) next.push(id);
+    }
+    state.selectedIds = next;
+  }
+
+  function clearSelection() {
+    state.selectedIds = [];
+  }
+
+  function toggleSelected(id) {
+    if (isSelected(id)) {
+      state.selectedIds = state.selectedIds.filter((x) => x !== id);
+    } else if (findItem(id)) {
+      state.selectedIds.push(id);
+    }
   }
 
   function layerOfItem(id) {
@@ -186,28 +266,169 @@
   }
 
   function defaultSize(sprite) {
+    if (!sprite) return { w: 4, h: 4 };
     return { w: sprite.w || 4, h: sprite.h || 4 };
   }
 
-  function clampItem(item, grid) {
-    item.w = clamp(item.w, 1, grid);
-    item.h = clamp(item.h, 1, grid);
-    item.x = clamp(item.x, 0, grid - item.w);
-    item.y = clamp(item.y, 0, grid - item.h);
+  function viewPixels() {
+    return { w: state.gridW * TILE, h: state.gridH * TILE };
+  }
+
+  function exportPixels() {
+    return { w: state.gridW * EXPORT_TILE, h: state.gridH * EXPORT_TILE };
+  }
+
+  function sizeReadoutText() {
+    const view = viewPixels();
+    const image = exportPixels();
+    return `View ${view.w} x ${view.h} · Image ${image.w} x ${image.h}`;
+  }
+
+  function clampItem(item) {
+    item.w = clamp(item.w, 1, state.gridW);
+    item.h = clamp(item.h, 1, state.gridH);
+    item.x = clamp(item.x, 0, state.gridW - item.w);
+    item.y = clamp(item.y, 0, state.gridH - item.h);
+  }
+
+  function itemRotation(item) {
+    return ((Number(item.rotation) || 0) % 360 + 360) % 360;
+  }
+
+  function contentSize(item) {
+    const rot = itemRotation(item);
+    const swapped = rot === 90 || rot === 270;
+    return swapped ? { w: item.h, h: item.w } : { w: item.w, h: item.h };
+  }
+
+  function visualTransform(item) {
+    const rot = itemRotation(item);
+    const sx = item.flipX ? -1 : 1;
+    const sy = item.flipY ? -1 : 1;
+    return `translate(-50%, -50%) rotate(${rot}deg) scale(${sx}, ${sy})`;
+  }
+
+  function rotateItem(item, degrees) {
+    const prev = itemRotation(item);
+    const next = ((prev + degrees) % 360 + 360) % 360;
+    const wasSwapped = prev === 90 || prev === 270;
+    const nowSwapped = next === 90 || next === 270;
+    if (wasSwapped !== nowSwapped) {
+      const cx = item.x + item.w / 2;
+      const cy = item.y + item.h / 2;
+      const tw = item.w;
+      item.w = item.h;
+      item.h = tw;
+      item.x = Math.round(cx - item.w / 2);
+      item.y = Math.round(cy - item.h / 2);
+    }
+    item.rotation = next;
+    clampItem(item);
+  }
+
+  function transformSelected(mutator) {
+    const recs = editableSelected();
+    if (!recs.length) return;
+    checkpoint();
+    for (const rec of recs) {
+      mutator(rec.item);
+      clampItem(rec.item);
+    }
+    renderItems();
+    renderInspector();
+    renderStatus();
+  }
+
+  function clampGroupDelta(starts, dx, dy) {
+    let minDx = -Infinity;
+    let maxDx = Infinity;
+    let minDy = -Infinity;
+    let maxDy = Infinity;
+    for (const start of starts) {
+      const rec = findItem(start.id);
+      if (!rec) continue;
+      minDx = Math.max(minDx, -start.x);
+      maxDx = Math.min(maxDx, state.gridW - rec.item.w - start.x);
+      minDy = Math.max(minDy, -start.y);
+      maxDy = Math.min(maxDy, state.gridH - rec.item.h - start.y);
+    }
+    if (!Number.isFinite(minDx)) return { dx: 0, dy: 0 };
+    return {
+      dx: clamp(dx, minDx, maxDx),
+      dy: clamp(dy, minDy, maxDy),
+    };
+  }
+
+  function itemsIntersectingMarquee(x0, y0, x1, y1) {
+    const x = Math.min(x0, x1);
+    const y = Math.min(y0, y1);
+    const w = Math.max(Math.abs(x1 - x0), 0.02);
+    const h = Math.max(Math.abs(y1 - y0), 0.02);
+    const ids = [];
+    for (const layerId of LAYER_ORDER) {
+      const layer = state.layers[layerId];
+      if (!layer.visible) continue;
+      for (const item of layer.items) {
+        const overlap = x < item.x + item.w && x + w > item.x && y < item.y + item.h && y + h > item.y;
+        if (overlap) ids.push(item.id);
+      }
+    }
+    return ids;
+  }
+
+  function showMarquee(x0, y0, x1, y1) {
+    const x = Math.min(x0, x1);
+    const y = Math.min(y0, y1);
+    els.marquee.classList.add("on");
+    els.marquee.style.left = `${x * TILE}px`;
+    els.marquee.style.top = `${y * TILE}px`;
+    els.marquee.style.width = `${Math.abs(x1 - x0) * TILE}px`;
+    els.marquee.style.height = `${Math.abs(y1 - y0) * TILE}px`;
+  }
+
+  function hideMarquee() {
+    els.marquee.classList.remove("on");
   }
 
   function eventToBoard(e) {
     const rect = els.board.getBoundingClientRect();
-    const visual = TILE * state.zoom;
-    const fx = (e.clientX - rect.left) / visual;
-    const fy = (e.clientY - rect.top) / visual;
+    const width = rect.width;
+    const height = rect.height;
+    if (width <= 0 || height <= 0) {
+      return { fx: -1, fy: -1, x: -1, y: -1, inside: false };
+    }
+    const fx = ((e.clientX - rect.left) / width) * state.gridW;
+    const fy = ((e.clientY - rect.top) / height) * state.gridH;
     return {
       fx,
       fy,
       x: Math.floor(fx),
       y: Math.floor(fy),
-      inside: fx >= 0 && fy >= 0 && fx < state.gridSize && fy < state.gridSize,
+      inside: fx >= 0 && fy >= 0 && fx < state.gridW && fy < state.gridH,
     };
+  }
+
+  function ghostForSprite(spriteId, e) {
+    const sprite = spriteById(spriteId);
+    const pos = eventToBoard(e);
+    if (!sprite || !pos.inside) {
+      hideGhost();
+      return;
+    }
+    const size = defaultSize(sprite);
+    const x = clamp(pos.x, 0, state.gridW - size.w);
+    const y = clamp(pos.y, 0, state.gridH - size.h);
+    showGhost(x, y, size.w, size.h);
+  }
+
+  function placeSpriteAtEvent(spriteId, e) {
+    const sprite = spriteById(spriteId);
+    const pos = eventToBoard(e);
+    if (!sprite || !pos.inside) return null;
+    const size = defaultSize(sprite);
+    const x = clamp(pos.x, 0, state.gridW - size.w);
+    const y = clamp(pos.y, 0, state.gridH - size.h);
+    return placeSprite(spriteId, x, y, size);
   }
 
   function hitTest(layerId, fx, fy) {
@@ -287,14 +508,20 @@
   }
 
   function renderBoardFrame() {
-    els.board.style.setProperty("--grid", String(state.gridSize));
+    els.board.style.setProperty("--grid-w", String(state.gridW));
+    els.board.style.setProperty("--grid-h", String(state.gridH));
     els.board.style.setProperty("--tile", `${TILE}px`);
     els.board.style.transform = `scale(${state.zoom})`;
     els.board.classList.toggle("show-grid", state.showGrid);
-    const size = state.gridSize * TILE * state.zoom;
-    els.boardWrap.style.width = `${size + 96}px`;
-    els.boardWrap.style.height = `${size + 96}px`;
+    const viewW = state.gridW * TILE * state.zoom;
+    const viewH = state.gridH * TILE * state.zoom;
+    els.boardWrap.style.width = `${viewW + 96}px`;
+    els.boardWrap.style.height = `${viewH + 96}px`;
     els.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+    if (els.sizeReadout) {
+      const image = exportPixels();
+      els.sizeReadout.textContent = `Image ${image.w} x ${image.h}`;
+    }
     els.toggleGrid.classList.toggle("on", state.showGrid);
     els.toggleGrid.setAttribute("aria-pressed", String(state.showGrid));
   }
@@ -307,8 +534,9 @@
       node.style.zIndex = String(LAYER_ORDER.indexOf(layerId) + 1);
       node.innerHTML = layer.items
         .map((item) => {
-          const selected = item.id === state.selectedId ? " selected" : "";
-          return `<div class="placed${selected}" data-id="${item.id}" style="left:${item.x * TILE}px;top:${item.y * TILE}px;width:${item.w * TILE}px;height:${item.h * TILE}px">${itemMarkup(item)}</div>`;
+          const selected = isSelected(item.id) && state.selectedIds.length > 1 ? " selected" : "";
+          const inner = contentSize(item);
+          return `<div class="placed${selected}" data-id="${item.id}" style="left:${item.x * TILE}px;top:${item.y * TILE}px;width:${item.w * TILE}px;height:${item.h * TILE}px"><div class="placed-visual" style="width:${inner.w * TILE}px;height:${inner.h * TILE}px;transform:${visualTransform(item)}">${itemMarkup(item)}</div></div>`;
         })
         .join("");
     }
@@ -316,23 +544,38 @@
   }
 
   function renderSelection() {
-    const rec = selectedRecord();
-    if (!rec || !state.layers[rec.layerId].visible) {
+    const recs = selectedRecords().filter((rec) => state.layers[rec.layerId].visible);
+    const editable = editableSelected();
+    els.deleteItem.disabled = !editable.length;
+    if (!recs.length) {
       els.selection.classList.remove("active");
-      els.deleteItem.disabled = true;
       return;
     }
-    const { item } = rec;
+    if (recs.length === 1) {
+      const { item, layerId } = recs[0];
+      els.selection.classList.add("active");
+      els.selection.style.left = `${item.x * TILE}px`;
+      els.selection.style.top = `${item.y * TILE}px`;
+      els.selection.style.width = `${item.w * TILE}px`;
+      els.selection.style.height = `${item.h * TILE}px`;
+      const canResize = canEditLayer(layerId);
+      els.selection.querySelectorAll(".handle").forEach((h) => {
+        h.style.display = canResize ? "block" : "none";
+      });
+      return;
+    }
+    const minX = Math.min(...recs.map((r) => r.item.x));
+    const minY = Math.min(...recs.map((r) => r.item.y));
+    const maxX = Math.max(...recs.map((r) => r.item.x + r.item.w));
+    const maxY = Math.max(...recs.map((r) => r.item.y + r.item.h));
     els.selection.classList.add("active");
-    els.selection.style.left = `${item.x * TILE}px`;
-    els.selection.style.top = `${item.y * TILE}px`;
-    els.selection.style.width = `${item.w * TILE}px`;
-    els.selection.style.height = `${item.h * TILE}px`;
-    const editable = canEditLayer(rec.layerId);
+    els.selection.style.left = `${minX * TILE}px`;
+    els.selection.style.top = `${minY * TILE}px`;
+    els.selection.style.width = `${(maxX - minX) * TILE}px`;
+    els.selection.style.height = `${(maxY - minY) * TILE}px`;
     els.selection.querySelectorAll(".handle").forEach((h) => {
-      h.style.display = editable ? "block" : "none";
+      h.style.display = "none";
     });
-    els.deleteItem.disabled = !editable;
   }
 
   function renderPalette() {
@@ -343,17 +586,19 @@
     } else {
       els.uploadsWrap.classList.remove("hidden");
       els.uploads.innerHTML = state.uploads
-        .map((up) => spriteCard(up.id, `<img alt="${escapeAttr(up.name)}" src="${up.src}" class="h-10 w-full object-contain" />`, up.name))
+        .map((up) => spriteCard(up.id, `<img alt="${escapeAttr(up.name)}" src="${up.src}" draggable="false" class="h-10 w-full object-contain" />`, up.name))
         .join("");
     }
-    els.stampHint.textContent = state.stampId ? "Stamping" : "";
+    els.stampHint.textContent = stampHintText();
+    syncStampClass();
   }
 
   function spriteCard(id, preview, name) {
     const active = state.stampId === id ? " active" : "";
-    return `<button type="button" class="sprite-card${active} px-2 py-2 text-left" data-sprite="${id}" title="Drag onto the grid or click, then click a tile">
-      <div class="mb-1 flex h-12 items-center justify-center">${preview}</div>
-      <div class="truncate text-[10px] font-medium text-mist">${escapeAttr(name)}</div>
+    const pressed = state.stampId === id ? "true" : "false";
+    return `<button type="button" draggable="false" class="sprite-card${active} px-2 py-2 text-left" data-sprite="${id}" aria-pressed="${pressed}" title="Click to stamp, or drag onto the grid">
+      <div class="mb-1 flex h-12 items-center justify-center pointer-events-none">${preview}</div>
+      <div class="truncate text-[10px] font-medium text-mist pointer-events-none">${escapeAttr(name)}</div>
     </button>`;
   }
 
@@ -379,11 +624,62 @@
   }
 
   function renderInspector() {
-    const rec = selectedRecord();
-    if (!rec) {
-      els.inspector.innerHTML = `<p>Select a placed sprite to edit it.</p>`;
+    const recs = selectedRecords();
+    if (!recs.length) {
+      els.inspector.innerHTML = `<p>Select a placed sprite to edit it. Drag a box on empty board space to select several.</p>`;
       return;
     }
+    if (recs.length > 1) {
+      const editable = editableSelected();
+      const disabled = editable.length ? "" : "disabled";
+      const allFlipX = editable.length && editable.every((r) => r.item.flipX);
+      const allFlipY = editable.length && editable.every((r) => r.item.flipY);
+      els.inspector.innerHTML = `
+        <div class="mb-3 rounded-lg border border-ink-line bg-ink-raised p-2">
+          <div class="text-[10px] uppercase tracking-wider text-mist">Selection</div>
+          <div class="mt-1 font-medium text-slate-100">${recs.length} sprites</div>
+          <div class="mt-0.5 text-[10px] text-mist">${editable.length} editable on unlocked layers</div>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" id="send-back" class="flex-1 rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled}>Send back</button>
+          <button type="button" id="bring-front" class="flex-1 rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled}>Bring front</button>
+        </div>
+        <div class="mt-3">
+          <div class="mb-1 text-[10px] uppercase tracking-wider text-mist">Transform</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="flip-h" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]${allFlipX ? " on" : ""}" ${disabled} title="Flip horizontal">Flip H</button>
+            <button type="button" id="flip-v" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]${allFlipY ? " on" : ""}" ${disabled} title="Flip vertical">Flip V</button>
+            <button type="button" id="rot-ccw" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled} title="Rotate 90 degrees counterclockwise">Rotate left</button>
+            <button type="button" id="rot-cw" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled} title="Rotate 90 degrees clockwise">Rotate right</button>
+          </div>
+        </div>
+        ${editable.length ? "" : `<p class="mt-2 text-[10px] text-mist">Locked or hidden items cannot be edited.</p>`}
+      `;
+      document.getElementById("bring-front")?.addEventListener("click", () => {
+        const list = editableSelected();
+        if (!list.length) return;
+        checkpoint();
+        for (const rec of list) bringToFront(rec.item.id);
+        renderItems();
+      });
+      document.getElementById("send-back")?.addEventListener("click", () => {
+        const list = editableSelected();
+        if (!list.length) return;
+        checkpoint();
+        for (const rec of list) sendToBack(rec.item.id);
+        renderItems();
+      });
+      document.getElementById("flip-h")?.addEventListener("click", () => transformSelected((it) => {
+        it.flipX = !it.flipX;
+      }));
+      document.getElementById("flip-v")?.addEventListener("click", () => transformSelected((it) => {
+        it.flipY = !it.flipY;
+      }));
+      document.getElementById("rot-ccw")?.addEventListener("click", () => transformSelected((it) => rotateItem(it, -90)));
+      document.getElementById("rot-cw")?.addEventListener("click", () => transformSelected((it) => rotateItem(it, 90)));
+      return;
+    }
+    const rec = recs[0];
     const { item, layerId } = rec;
     const sprite = spriteById(item.spriteId);
     const locked = !canEditLayer(layerId);
@@ -404,6 +700,16 @@
         <button type="button" id="send-back" class="flex-1 rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled}>Send back</button>
         <button type="button" id="bring-front" class="flex-1 rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled}>Bring front</button>
       </div>
+      <div class="mt-3">
+        <div class="mb-1 text-[10px] uppercase tracking-wider text-mist">Transform</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="flip-h" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]${item.flipX ? " on" : ""}" ${disabled} title="Flip horizontal">Flip H</button>
+          <button type="button" id="flip-v" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]${item.flipY ? " on" : ""}" ${disabled} title="Flip vertical">Flip V</button>
+          <button type="button" id="rot-ccw" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled} title="Rotate 90 degrees counterclockwise">Rotate left</button>
+          <button type="button" id="rot-cw" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled} title="Rotate 90 degrees clockwise">Rotate right</button>
+        </div>
+        <div class="mt-1 text-[10px] text-mist">Rotation ${itemRotation(item)} deg</div>
+      </div>
       ${locked ? `<p class="mt-2 text-[10px] text-mist">Layer is hidden or locked. Unlock it to edit.</p>` : ""}
     `;
     const bind = (id, key, min, maxFn) => {
@@ -414,16 +720,16 @@
         if (!recNow || !canEditLayer(recNow.layerId)) return;
         checkpoint();
         recNow.item[key] = clamp(parseInt(input.value, 10) || 0, min, maxFn(recNow.item));
-        clampItem(recNow.item, state.gridSize);
+        clampItem(recNow.item);
         renderItems();
         renderInspector();
         renderStatus();
       });
     };
-    bind("insp-x", "x", 0, (it) => state.gridSize - it.w);
-    bind("insp-y", "y", 0, (it) => state.gridSize - it.h);
-    bind("insp-w", "w", 1, (it) => state.gridSize - it.x);
-    bind("insp-h", "h", 1, (it) => state.gridSize - it.y);
+    bind("insp-x", "x", 0, (it) => state.gridW - it.w);
+    bind("insp-y", "y", 0, (it) => state.gridH - it.h);
+    bind("insp-w", "w", 1, (it) => state.gridW - it.x);
+    bind("insp-h", "h", 1, (it) => state.gridH - it.y);
     document.getElementById("bring-front")?.addEventListener("click", () => {
       if (!canEditLayer(layerId)) return;
       checkpoint();
@@ -436,6 +742,14 @@
       sendToBack(item.id);
       renderItems();
     });
+    document.getElementById("flip-h")?.addEventListener("click", () => transformSelected((it) => {
+      it.flipX = !it.flipX;
+    }));
+    document.getElementById("flip-v")?.addEventListener("click", () => transformSelected((it) => {
+      it.flipY = !it.flipY;
+    }));
+    document.getElementById("rot-ccw")?.addEventListener("click", () => transformSelected((it) => rotateItem(it, -90)));
+    document.getElementById("rot-cw")?.addEventListener("click", () => transformSelected((it) => rotateItem(it, 90)));
   }
 
   function numField(label, id, value, disabled) {
@@ -448,11 +762,21 @@
   function renderStatus() {
     const rec = selectedRecord();
     const hover = state.hoverTile;
-    const tileText = hover ? `Tile ${hover.x}, ${hover.y}` : "Tile -, -";
-    const extra = rec ? `  |  ${rec.item.w} x ${rec.item.h} at ${rec.item.x}, ${rec.item.y}` : hoverItemId ? "  |  click to select" : "";
-    els.statusLeft.textContent = tileText + extra;
+    const stamp = state.stampId ? spriteById(state.stampId) : null;
+    let tileText = hover ? `Tile ${hover.x}, ${hover.y}` : "Tile -, -";
+    if (stamp) {
+      const size = defaultSize(stamp);
+      tileText = `${stampHintText()} (${size.w} x ${size.h} tiles)` + (hover ? `  |  ${tileText}` : "");
+    } else if (state.selectedIds.length > 1) {
+      tileText += `  |  ${state.selectedIds.length} selected`;
+    } else if (rec) {
+      tileText += `  |  ${rec.item.w} x ${rec.item.h} at ${rec.item.x}, ${rec.item.y}`;
+    } else if (hoverItemId) {
+      tileText += "  |  click to select";
+    }
+    els.statusLeft.textContent = tileText;
     const counts = LAYER_ORDER.map((id) => state.layers[id].items.length).reduce((a, b) => a + b, 0);
-    els.statusRight.textContent = `${state.gridSize} x ${state.gridSize}  |  ${LAYER_META[state.activeLayer].name}  |  ${counts} items  |  Esc deselects, Delete removes, Ctrl/Cmd+Z undoes`;
+    els.statusRight.textContent = `${sizeReadoutText()}  |  ${LAYER_META[state.activeLayer].name}  |  ${counts} items`;
   }
 
   function renderAll() {
@@ -462,6 +786,7 @@
     renderLayers();
     renderInspector();
     renderStatus();
+    syncHistoryButtons();
   }
 
   function placeSprite(spriteId, x, y, size) {
@@ -479,11 +804,14 @@
       y,
       w: def.w,
       h: def.h,
+      flipX: false,
+      flipY: false,
+      rotation: 0,
     };
-    clampItem(item, state.gridSize);
+    clampItem(item);
     checkpoint();
     state.layers[state.activeLayer].items.push(item);
-    state.selectedId = item.id;
+    state.selectedIds = [item.id];
     renderItems();
     renderLayers();
     renderInspector();
@@ -492,23 +820,64 @@
   }
 
   function deleteSelected() {
-    const rec = selectedRecord();
-    if (!rec || !canEditLayer(rec.layerId)) return;
+    const recs = editableSelected();
+    if (!recs.length) return;
     checkpoint();
-    state.layers[rec.layerId].items = state.layers[rec.layerId].items.filter((it) => it.id !== rec.item.id);
-    state.selectedId = null;
+    const ids = new Set(recs.map((rec) => rec.item.id));
+    for (const layerId of LAYER_ORDER) {
+      state.layers[layerId].items = state.layers[layerId].items.filter((it) => !ids.has(it.id));
+    }
+    clearSelection();
     renderItems();
     renderLayers();
     renderInspector();
     renderStatus();
-    toast("Deleted sprite");
+    toast(recs.length === 1 ? "Deleted sprite" : `Deleted ${recs.length} sprites`);
+  }
+
+  function stampHintText() {
+    if (!state.stampId) return "";
+    const sprite = spriteById(state.stampId);
+    const name = sprite?.name || "sprite";
+    return `Click the grid to place ${name}`;
+  }
+
+  function syncStampClass() {
+    els.board.classList.toggle("stamping", Boolean(state.stampId));
+    if (els.stampBanner) {
+      const hint = stampHintText();
+      els.stampBanner.hidden = !hint;
+      els.stampBanner.textContent = hint || "Click the grid to place";
+    }
   }
 
   function syncStampUI() {
     document.querySelectorAll("[data-sprite]").forEach((el) => {
-      el.classList.toggle("active", el.dataset.sprite === state.stampId);
+      const on = el.dataset.sprite === state.stampId;
+      el.classList.toggle("active", on);
+      el.setAttribute("aria-pressed", String(on));
     });
-    els.stampHint.textContent = state.stampId ? "Stamping" : "";
+    els.stampHint.textContent = stampHintText();
+    updateToolCursor();
+    syncStampClass();
+    renderStatus();
+  }
+
+  function updateToolCursor() {
+    const panning = interaction?.type === "pan";
+    els.workspace.classList.toggle("hand", spaceHeld || panning);
+    els.workspace.classList.toggle("panning", panning);
+    if (panning) {
+      els.workspace.style.cursor = "grabbing";
+      els.board.style.cursor = "grabbing";
+      return;
+    }
+    if (spaceHeld) {
+      els.workspace.style.cursor = "grab";
+      els.board.style.cursor = "grab";
+      return;
+    }
+    els.workspace.style.cursor = "";
     els.board.style.cursor = state.stampId ? "copy" : "default";
   }
 
@@ -525,17 +894,18 @@
   }
 
   function applyResize(start, handle, pos) {
-    const grid = state.gridSize;
+    const gw = state.gridW;
+    const gh = state.gridH;
     let { x, y, w, h } = start;
     const right = x + w;
     const bottom = y + h;
-    const snapX = clamp(Math.round(pos.fx), 0, grid);
-    const snapY = clamp(Math.round(pos.fy), 0, grid);
+    const snapX = clamp(Math.round(pos.fx), 0, gw);
+    const snapY = clamp(Math.round(pos.fy), 0, gh);
     if (handle.includes("e")) {
-      w = clamp(snapX - x, 1, grid - x);
+      w = clamp(snapX - x, 1, gw - x);
     }
     if (handle.includes("s")) {
-      h = clamp(snapY - y, 1, grid - y);
+      h = clamp(snapY - y, 1, gh - y);
     }
     if (handle.includes("w")) {
       x = clamp(snapX, 0, right - 1);
@@ -555,21 +925,28 @@
       node.style.top = `${item.y * TILE}px`;
       node.style.width = `${item.w * TILE}px`;
       node.style.height = `${item.h * TILE}px`;
+      const visual = node.querySelector(".placed-visual");
+      if (visual) {
+        const inner = contentSize(item);
+        visual.style.width = `${inner.w * TILE}px`;
+        visual.style.height = `${inner.h * TILE}px`;
+        visual.style.transform = visualTransform(item);
+      }
     }
     renderSelection();
     renderStatus();
   }
 
   function setGridSize(next) {
-    const size = Number(next);
-    if (size === state.gridSize) return;
+    const dims = parseGridValue(next);
+    if (dims.w === state.gridW && dims.h === state.gridH) return;
     checkpoint();
-    state.gridSize = size;
+    applyGridDims(dims.w, dims.h);
     let clamped = false;
     for (const layerId of LAYER_ORDER) {
       for (const item of state.layers[layerId].items) {
         const before = `${item.x},${item.y},${item.w},${item.h}`;
-        clampItem(item, size);
+        clampItem(item);
         if (`${item.x},${item.y},${item.w},${item.h}` !== before) clamped = true;
       }
     }
@@ -579,8 +956,7 @@
 
   function loadSample() {
     checkpoint();
-    state.gridSize = 32;
-    els.gridSize.value = "32";
+    applyGridDims(32, 32);
     state.layers = {
       background: {
         visible: true,
@@ -618,7 +994,7 @@
       },
     };
     state.activeLayer = "middle";
-    state.selectedId = null;
+    clearSelection();
     renderAll();
     toast("Loaded sample HUD layout");
   }
@@ -638,7 +1014,7 @@
     const data = {
       app: "Layout Maker",
       version: 1,
-      grid: { cols: state.gridSize, rows: state.gridSize },
+      grid: { cols: state.gridW, rows: state.gridH },
       layers: LAYER_ORDER.map((id) => ({
         id,
         name: LAYER_META[id].name,
@@ -650,12 +1026,15 @@
           y: item.y,
           width: item.width ?? item.w,
           height: item.height ?? item.h,
+          flipX: Boolean(item.flipX),
+          flipY: Boolean(item.flipY),
+          rotation: itemRotation(item),
           sprite: spriteRef(item),
         })),
       })),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    downloadBlob(blob, `layout-${state.gridSize}x${state.gridSize}.json`);
+    downloadBlob(blob, `layout-${state.gridW}x${state.gridH}.json`);
     toast("Exported layout JSON");
   }
 
@@ -806,19 +1185,35 @@
     ctx.restore();
   }
 
+  function beginItemTransform(ctx, item, unit) {
+    const x = item.x * unit;
+    const y = item.y * unit;
+    const w = item.w * unit;
+    const h = item.h * unit;
+    const inner = contentSize(item);
+    const iw = inner.w * unit;
+    const ih = inner.h * unit;
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate((itemRotation(item) * Math.PI) / 180);
+    ctx.scale(item.flipX ? -1 : 1, item.flipY ? -1 : 1);
+    ctx.translate(-iw / 2, -ih / 2);
+    return { w: iw, h: ih };
+  }
+
   async function exportPNG() {
-    const unit = 32;
+    const unit = EXPORT_TILE;
     const canvas = document.createElement("canvas");
-    canvas.width = state.gridSize * unit;
-    canvas.height = state.gridSize * unit;
+    canvas.width = state.gridW * unit;
+    canvas.height = state.gridH * unit;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#151a24";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const checker = unit;
     ctx.fillStyle = "#131820";
-    for (let y = 0; y < state.gridSize; y += 1) {
-      for (let x = 0; x < state.gridSize; x += 1) {
+    for (let y = 0; y < state.gridH; y += 1) {
+      for (let x = 0; x < state.gridW; x += 1) {
         if ((x + y) % 2 === 0) ctx.fillRect(x * checker, y * checker, checker, checker);
       }
     }
@@ -828,17 +1223,15 @@
       if (!layer.visible) continue;
       for (const item of layer.items) {
         const sprite = spriteById(item.spriteId);
-        const x = item.x * unit;
-        const y = item.y * unit;
-        const w = item.w * unit;
-        const h = item.h * unit;
         if (!sprite) continue;
+        const box = beginItemTransform(ctx, item, unit);
         if (sprite.kind === "image") {
           const img = await loadImage(sprite.src);
-          ctx.drawImage(img, x, y, w, h);
+          ctx.drawImage(img, 0, 0, box.w, box.h);
         } else {
-          drawShape(ctx, sprite, x, y, w, h);
+          drawShape(ctx, sprite, 0, 0, box.w, box.h);
         }
+        ctx.restore();
       }
     }
 
@@ -846,9 +1239,11 @@
       ctx.strokeStyle = "rgba(232, 236, 244, 0.18)";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let i = 0; i <= state.gridSize; i += 1) {
+      for (let i = 0; i <= state.gridW; i += 1) {
         ctx.moveTo(i * unit + 0.5, 0);
         ctx.lineTo(i * unit + 0.5, canvas.height);
+      }
+      for (let i = 0; i <= state.gridH; i += 1) {
         ctx.moveTo(0, i * unit + 0.5);
         ctx.lineTo(canvas.width, i * unit + 0.5);
       }
@@ -856,7 +1251,7 @@
     }
 
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-    downloadBlob(blob, `layout-${state.gridSize}x${state.gridSize}.png`);
+    downloadBlob(blob, `layout-${state.gridW}x${state.gridH}.png`);
     toast(state.showGrid ? "Exported PNG with grid lines" : "Exported PNG without grid lines");
   }
 
@@ -912,11 +1307,41 @@
     return tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
   }
 
+  function isSpaceKey(e) {
+    return e.code === "Space" || e.key === " " || e.key === "Spacebar";
+  }
+
+  function startPan(e) {
+    interaction = {
+      type: "pan",
+      lastX: e.clientX,
+      lastY: e.clientY,
+    };
+    try {
+      els.workspace.setPointerCapture(e.pointerId);
+    } catch (_) {
+      /* capture is optional */
+    }
+    updateToolCursor();
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function onPointerDownPan(e) {
+    if (editingField()) return;
+    if (interaction && interaction.type !== "pan") return;
+    const middle = e.button === 1;
+    const spaceDrag = e.button === 0 && spaceHeld;
+    if (!middle && !spaceDrag) return;
+    startPan(e);
+  }
+
   function onPointerDownBoard(e) {
+    if (spaceHeld) return;
     if (e.button !== 0) return;
     const pos = eventToBoard(e);
     const handle = e.target.closest?.(".handle");
-    if (handle && state.selectedId) {
+    if (handle && state.selectedIds.length === 1 && !state.stampId) {
       const rec = selectedRecord();
       if (!rec || !canEditLayer(rec.layerId)) return;
       checkpoint();
@@ -931,22 +1356,35 @@
       return;
     }
 
+    if (state.stampId && pos.inside) {
+      placeSpriteAtEvent(state.stampId, e);
+      e.preventDefault();
+      return;
+    }
+
     const hit = pos.inside ? hitTestAll(pos.fx, pos.fy) : null;
     if (hit) {
       state.activeLayer = hit.layerId;
-      state.selectedId = hit.item.id;
       state.stampId = null;
+      if (e.shiftKey) {
+        toggleSelected(hit.item.id);
+      } else if (!isSelected(hit.item.id)) {
+        setSelection([hit.item.id]);
+      }
       renderPalette();
       renderLayers();
       renderItems();
       renderInspector();
-      if (canEditLayer(hit.layerId)) {
+      syncStampUI();
+      if (isSelected(hit.item.id) && canEditLayer(hit.layerId)) {
+        const movers = editableSelected();
         checkpoint();
         interaction = {
           type: "move",
           itemId: hit.item.id,
           ox: pos.fx - hit.item.x,
           oy: pos.fy - hit.item.y,
+          startPositions: movers.map((rec) => ({ id: rec.item.id, x: rec.item.x, y: rec.item.y })),
           moved: false,
         };
         els.board.setPointerCapture(e.pointerId);
@@ -955,20 +1393,29 @@
       return;
     }
 
-    if (state.stampId && pos.inside) {
-      const sprite = spriteById(state.stampId);
-      const size = defaultSize(sprite);
-      const x = clamp(pos.x, 0, state.gridSize - size.w);
-      const y = clamp(pos.y, 0, state.gridSize - size.h);
-      placeSprite(state.stampId, x, y, size);
+    if (pos.inside && !state.stampId) {
+      interaction = {
+        type: "marquee",
+        x0: pos.fx,
+        y0: pos.fy,
+        x1: pos.fx,
+        y1: pos.fy,
+        startX: e.clientX,
+        startY: e.clientY,
+        dragging: false,
+        additive: e.shiftKey,
+      };
+      els.board.setPointerCapture(e.pointerId);
       e.preventDefault();
       return;
     }
 
-    state.selectedId = null;
-    renderItems();
-    renderInspector();
-    renderStatus();
+    if (!e.shiftKey) {
+      clearSelection();
+      renderItems();
+      renderInspector();
+      renderStatus();
+    }
   }
 
   function onPointerMove(e) {
@@ -981,11 +1428,7 @@
 
     if (!interaction) {
       if (state.stampId && pos.inside) {
-        const sprite = spriteById(state.stampId);
-        const size = defaultSize(sprite);
-        const x = clamp(pos.x, 0, state.gridSize - size.w);
-        const y = clamp(pos.y, 0, state.gridSize - size.h);
-        showGhost(x, y, size.w, size.h);
+        ghostForSprite(state.stampId, e);
       } else {
         hideGhost();
       }
@@ -995,15 +1438,46 @@
       return;
     }
 
+    if (interaction.type === "pan") {
+      const dx = e.clientX - interaction.lastX;
+      const dy = e.clientY - interaction.lastY;
+      interaction.lastX = e.clientX;
+      interaction.lastY = e.clientY;
+      els.workspace.scrollLeft -= dx;
+      els.workspace.scrollTop -= dy;
+      return;
+    }
+
+    if (interaction.type === "palette") return;
+
+    if (interaction.type === "marquee") {
+      interaction.x1 = pos.fx;
+      interaction.y1 = pos.fy;
+      if (Math.hypot(e.clientX - interaction.startX, e.clientY - interaction.startY) > 6) {
+        interaction.dragging = true;
+      }
+      showMarquee(interaction.x0, interaction.y0, interaction.x1, interaction.y1);
+      renderStatus();
+      return;
+    }
+
     const rec = findItem(interaction.itemId);
     if (!rec) return;
     if (interaction.type === "move") {
-      const nx = clamp(Math.round(pos.fx - interaction.ox), 0, state.gridSize - rec.item.w);
-      const ny = clamp(Math.round(pos.fy - interaction.oy), 0, state.gridSize - rec.item.h);
-      if (nx !== rec.item.x || ny !== rec.item.y) interaction.moved = true;
-      rec.item.x = nx;
-      rec.item.y = ny;
-      liveUpdateItem(rec.item);
+      const leadStart = interaction.startPositions.find((p) => p.id === rec.item.id) || { x: rec.item.x, y: rec.item.y };
+      const nx = Math.round(pos.fx - interaction.ox);
+      const ny = Math.round(pos.fy - interaction.oy);
+      const rawDx = nx - leadStart.x;
+      const rawDy = ny - leadStart.y;
+      const next = clampGroupDelta(interaction.startPositions, rawDx, rawDy);
+      if (next.dx !== 0 || next.dy !== 0) interaction.moved = true;
+      for (const start of interaction.startPositions) {
+        const moving = findItem(start.id);
+        if (!moving) continue;
+        moving.item.x = start.x + next.dx;
+        moving.item.y = start.y + next.dy;
+        liveUpdateItem(moving.item);
+      }
     }
     if (interaction.type === "resize") {
       const next = applyResize(interaction.start, interaction.handle, pos);
@@ -1017,8 +1491,28 @@
 
   function onPointerUp() {
     if (!interaction || interaction.type === "palette") return;
+    if (interaction.type === "pan") {
+      interaction = null;
+      updateToolCursor();
+      return;
+    }
+    if (interaction.type === "marquee") {
+      hideMarquee();
+      if (interaction.dragging) {
+        const ids = itemsIntersectingMarquee(interaction.x0, interaction.y0, interaction.x1, interaction.y1);
+        setSelection(interaction.additive ? [...state.selectedIds, ...ids] : ids);
+      } else if (!interaction.additive) {
+        clearSelection();
+      }
+      renderItems();
+      renderInspector();
+      renderStatus();
+      interaction = null;
+      return;
+    }
     if (interaction.type === "move" && !interaction.moved) {
       history.pop();
+      syncHistoryButtons();
     }
     if (interaction.type === "resize" || interaction.moved) {
       renderLayers();
@@ -1034,6 +1528,11 @@
     e.preventDefault();
     const spriteId = card.dataset.sprite;
     if (!spriteById(spriteId)) return;
+    try {
+      card.setPointerCapture(e.pointerId);
+    } catch (_) {
+      /* capture is optional */
+    }
     interaction = {
       type: "palette",
       spriteId,
@@ -1043,35 +1542,25 @@
       wasStamp: state.stampId === spriteId,
     };
     state.stampId = spriteId;
+    clearSelection();
+    renderItems();
+    renderInspector();
     syncStampUI();
   }
 
   function onPalettePointerMove(e) {
     if (interaction?.type !== "palette") return;
-    const pos = eventToBoard(e);
     if (Math.hypot(e.clientX - interaction.startX, e.clientY - interaction.startY) > 6) {
       interaction.dragging = true;
     }
-    if (pos.inside) {
-      const sprite = spriteById(interaction.spriteId);
-      const size = defaultSize(sprite);
-      const x = clamp(pos.x, 0, state.gridSize - size.w);
-      const y = clamp(pos.y, 0, state.gridSize - size.h);
-      showGhost(x, y, size.w, size.h);
-    } else {
-      hideGhost();
-    }
+    ghostForSprite(interaction.spriteId, e);
   }
 
   function onPalettePointerUp(e) {
     if (interaction?.type !== "palette") return;
     const pos = eventToBoard(e);
-    if (interaction.dragging && pos.inside) {
-      const sprite = spriteById(interaction.spriteId);
-      const size = defaultSize(sprite);
-      const x = clamp(pos.x, 0, state.gridSize - size.w);
-      const y = clamp(pos.y, 0, state.gridSize - size.h);
-      placeSprite(interaction.spriteId, x, y, size);
+    if (pos.inside) {
+      placeSpriteAtEvent(interaction.spriteId, e);
     } else if (!interaction.dragging && interaction.wasStamp) {
       state.stampId = null;
       syncStampUI();
@@ -1085,12 +1574,18 @@
     state.showGrid = !state.showGrid;
     renderBoardFrame();
   });
+  els.undo.addEventListener("click", undo);
+  els.redo.addEventListener("click", redo);
   els.zoomIn.addEventListener("click", () => {
     state.zoom = clamp(Math.round((state.zoom + 0.25) * 100) / 100, 0.5, 2);
     renderBoardFrame();
   });
   els.zoomOut.addEventListener("click", () => {
     state.zoom = clamp(Math.round((state.zoom - 0.25) * 100) / 100, 0.5, 2);
+    renderBoardFrame();
+  });
+  els.zoomLabel.addEventListener("click", () => {
+    state.zoom = 1;
     renderBoardFrame();
   });
   els.exportPng.addEventListener("click", () => {
@@ -1117,10 +1612,27 @@
 
   els.builtin.addEventListener("pointerdown", onPalettePointerDown);
   els.uploads.addEventListener("pointerdown", onPalettePointerDown);
+  els.builtin.addEventListener("dragstart", (e) => e.preventDefault(), true);
+  els.uploads.addEventListener("dragstart", (e) => e.preventDefault(), true);
   window.addEventListener("pointermove", onPalettePointerMove);
   window.addEventListener("pointerup", onPalettePointerUp);
+  window.addEventListener("pointercancel", onPalettePointerUp);
 
+  els.workspace.addEventListener("pointerdown", onPointerDownPan, true);
+  els.workspace.addEventListener("mousedown", (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
   els.board.addEventListener("pointerdown", onPointerDownBoard);
+  els.board.addEventListener("dragover", (e) => {
+    if (!state.stampId) return;
+    e.preventDefault();
+    ghostForSprite(state.stampId, e);
+  });
+  els.board.addEventListener("drop", (e) => {
+    e.preventDefault();
+    if (state.stampId) placeSpriteAtEvent(state.stampId, e);
+    hideGhost();
+  });
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
   window.addEventListener("pointercancel", onPointerUp);
@@ -1132,8 +1644,8 @@
     if (vis) {
       const id = vis.dataset.vis;
       state.layers[id].visible = !state.layers[id].visible;
-      if (!state.layers[id].visible && layerOfItem(state.selectedId) === id) {
-        state.selectedId = null;
+      if (!state.layers[id].visible) {
+        state.selectedIds = state.selectedIds.filter((itemId) => layerOfItem(itemId) !== id);
       }
       renderItems();
       renderLayers();
@@ -1156,6 +1668,15 @@
   });
 
   window.addEventListener("keydown", (e) => {
+    if (isSpaceKey(e)) {
+      if (editingField()) return;
+      e.preventDefault();
+      if (!spaceHeld) {
+        spaceHeld = true;
+        if (!interaction || interaction.type === "pan") updateToolCursor();
+      }
+      return;
+    }
     const meta = e.metaKey || e.ctrlKey;
     if (meta && e.key.toLowerCase() === "z") {
       e.preventDefault();
@@ -1169,12 +1690,12 @@
       return;
     }
     if (e.key === "Escape") {
-      state.selectedId = null;
+      clearSelection();
       state.stampId = null;
-      els.board.style.cursor = "default";
       renderPalette();
       renderItems();
       renderInspector();
+      syncStampUI();
       return;
     }
     if (editingField()) return;
@@ -1183,18 +1704,38 @@
       deleteSelected();
     }
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
-      const rec = selectedRecord();
-      if (!rec || !canEditLayer(rec.layerId)) return;
+      const movers = editableSelected();
+      if (!movers.length) return;
       e.preventDefault();
-      checkpoint();
       const dx = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
       const dy = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
-      rec.item.x = clamp(rec.item.x + dx, 0, state.gridSize - rec.item.w);
-      rec.item.y = clamp(rec.item.y + dy, 0, state.gridSize - rec.item.h);
+      const starts = movers.map((rec) => ({ id: rec.item.id, x: rec.item.x, y: rec.item.y }));
+      const next = clampGroupDelta(starts, dx, dy);
+      if (next.dx === 0 && next.dy === 0) return;
+      checkpoint();
+      for (const rec of movers) {
+        rec.item.x += next.dx;
+        rec.item.y += next.dy;
+      }
       renderItems();
       renderInspector();
       renderStatus();
     }
+  });
+
+  window.addEventListener("keyup", (e) => {
+    if (!isSpaceKey(e)) return;
+    spaceHeld = false;
+    if (interaction?.type === "pan") {
+      interaction = null;
+    }
+    updateToolCursor();
+  });
+
+  window.addEventListener("blur", () => {
+    spaceHeld = false;
+    if (interaction?.type === "pan") interaction = null;
+    updateToolCursor();
   });
 
   renderAll();

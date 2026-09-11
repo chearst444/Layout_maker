@@ -1,5 +1,5 @@
 :root {
-  --tile: 20px;
+  --tile: 24px;
   --ink: #0b0d12;
   --panel: #12161f;
   --raised: #181d28;
@@ -40,11 +40,34 @@ body {
   background: transparent;
 }
 
-.workspace {
-  background:
-    radial-gradient(1200px 500px at 50% -10%, rgba(232, 168, 56, 0.07), transparent 55%),
-    linear-gradient(180deg, #0e1118 0%, #0b0d12 100%);
-  text-align: center;
+.workspace.hand {
+  cursor: grab;
+}
+
+.workspace.hand.panning {
+  cursor: grabbing;
+}
+
+.stamp-banner {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--honey);
+  background: rgba(18, 22, 31, 0.92);
+  color: var(--honey);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.stamp-banner[hidden] {
+  display: none;
 }
 
 #board-wrap {
@@ -55,8 +78,10 @@ body {
 
 #board {
   position: relative;
-  width: calc(var(--grid) * var(--tile));
-  height: calc(var(--grid) * var(--tile));
+  --grid-w: 32;
+  --grid-h: 32;
+  width: calc(var(--grid-w) * var(--tile));
+  height: calc(var(--grid-h) * var(--tile));
   transform-origin: 0 0;
   background-color: #151a24;
   background-image:
@@ -71,6 +96,13 @@ body {
     0 24px 60px rgba(0, 0, 0, 0.45);
   touch-action: none;
   user-select: none;
+}
+
+#board.stamping {
+  box-shadow:
+    0 0 0 2px var(--honey),
+    0 24px 60px rgba(0, 0, 0, 0.45);
+  cursor: copy;
 }
 
 #board.show-grid::after {
@@ -97,7 +129,19 @@ body {
 .placed {
   position: absolute;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.placed-visual {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+  pointer-events: none;
+}
+
+.placed.selected {
+  box-shadow: 0 0 0 2px var(--honey);
 }
 
 .placed img,
@@ -158,13 +202,36 @@ body {
   display: block;
 }
 
+#marquee {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed var(--honey);
+  background: rgba(232, 168, 56, 0.14);
+  pointer-events: none;
+  z-index: 36;
+  display: none;
+}
+
+#marquee.on {
+  display: block;
+}
+
 .sprite-card {
   border: 1px solid var(--line);
   background: var(--raised);
   border-radius: 10px;
   cursor: grab;
   touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
   transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sprite-card img,
+.sprite-card svg {
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .sprite-card:hover {
@@ -207,9 +274,52 @@ body {
   background: rgba(232, 168, 56, 0.12);
 }
 
+#inspector button.on {
+  color: var(--honey);
+  border-color: var(--honey);
+  background: rgba(232, 168, 56, 0.12);
+}
+
 .icon-btn:disabled {
   opacity: 0.35;
   pointer-events: none;
+}
+
+.history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: #e8ecf4;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.history-btn:hover:not(:disabled) {
+  border-color: var(--mist);
+  color: #fff;
+}
+
+.history-btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+@media (max-width: 639px) {
+  .history-btn span {
+    display: none;
+  }
+
+  .history-btn {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
 }
 
 #toast {

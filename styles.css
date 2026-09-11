@@ -48,11 +48,12 @@ body {
 }
 
 .stamp-banner {
-  position: sticky;
+  position: absolute;
   top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 50;
   display: inline-flex;
-  margin: 10px auto 0;
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid var(--honey);
@@ -61,6 +62,7 @@ body {
   font-size: 12px;
   font-weight: 600;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 .stamp-banner[hidden] {

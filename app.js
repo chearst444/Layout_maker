@@ -407,7 +407,7 @@
   function spriteCard(id, preview, name) {
     const active = state.stampId === id ? " active" : "";
     const pressed = state.stampId === id ? "true" : "false";
-    return `<button type="button" class="sprite-card${active} px-2 py-2 text-left" data-sprite="${id}" aria-pressed="${pressed}" title="Click to stamp, or drag onto the grid">
+    return `<button type="button" draggable="false" class="sprite-card${active} px-2 py-2 text-left" data-sprite="${id}" aria-pressed="${pressed}" title="Click to stamp, or drag onto the grid">
       <div class="mb-1 flex h-12 items-center justify-center pointer-events-none">${preview}</div>
       <div class="truncate text-[10px] font-medium text-mist pointer-events-none">${escapeAttr(name)}</div>
     </button>`;
@@ -1144,7 +1144,7 @@
   function onPalettePointerUp(e) {
     if (interaction?.type !== "palette") return;
     const pos = eventToBoard(e);
-    if (interaction.dragging && pos.inside) {
+    if (pos.inside) {
       placeSpriteAtEvent(interaction.spriteId, e);
     } else if (!interaction.dragging && interaction.wasStamp) {
       state.stampId = null;
@@ -1197,8 +1197,8 @@
 
   els.builtin.addEventListener("pointerdown", onPalettePointerDown);
   els.uploads.addEventListener("pointerdown", onPalettePointerDown);
-  els.builtin.addEventListener("dragstart", (e) => e.preventDefault());
-  els.uploads.addEventListener("dragstart", (e) => e.preventDefault());
+  els.builtin.addEventListener("dragstart", (e) => e.preventDefault(), true);
+  els.uploads.addEventListener("dragstart", (e) => e.preventDefault(), true);
   window.addEventListener("pointermove", onPalettePointerMove);
   window.addEventListener("pointerup", onPalettePointerUp);
   window.addEventListener("pointercancel", onPalettePointerUp);

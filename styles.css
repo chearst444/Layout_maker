@@ -126,7 +126,15 @@ body {
 .placed {
   position: absolute;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.placed-visual {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+  pointer-events: none;
 }
 
 .placed img,
@@ -242,6 +250,12 @@ body {
 
 .icon-btn.on {
   color: var(--honey);
+  background: rgba(232, 168, 56, 0.12);
+}
+
+#inspector button.on {
+  color: var(--honey);
+  border-color: var(--honey);
   background: rgba(232, 168, 56, 0.12);
 }
 

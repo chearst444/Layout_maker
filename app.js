@@ -222,6 +222,52 @@
     item.y = clamp(item.y, 0, grid - item.h);
   }
 
+  function itemRotation(item) {
+    return ((Number(item.rotation) || 0) % 360 + 360) % 360;
+  }
+
+  function contentSize(item) {
+    const rot = itemRotation(item);
+    const swapped = rot === 90 || rot === 270;
+    return swapped ? { w: item.h, h: item.w } : { w: item.w, h: item.h };
+  }
+
+  function visualTransform(item) {
+    const rot = itemRotation(item);
+    const sx = item.flipX ? -1 : 1;
+    const sy = item.flipY ? -1 : 1;
+    return `translate(-50%, -50%) rotate(${rot}deg) scale(${sx}, ${sy})`;
+  }
+
+  function rotateItem(item, degrees) {
+    const prev = itemRotation(item);
+    const next = ((prev + degrees) % 360 + 360) % 360;
+    const wasSwapped = prev === 90 || prev === 270;
+    const nowSwapped = next === 90 || next === 270;
+    if (wasSwapped !== nowSwapped) {
+      const cx = item.x + item.w / 2;
+      const cy = item.y + item.h / 2;
+      const tw = item.w;
+      item.w = item.h;
+      item.h = tw;
+      item.x = Math.round(cx - item.w / 2);
+      item.y = Math.round(cy - item.h / 2);
+    }
+    item.rotation = next;
+    clampItem(item, state.gridSize);
+  }
+
+  function transformSelected(mutator) {
+    const rec = selectedRecord();
+    if (!rec || !canEditLayer(rec.layerId)) return;
+    checkpoint();
+    mutator(rec.item);
+    clampItem(rec.item, state.gridSize);
+    renderItems();
+    renderInspector();
+    renderStatus();
+  }
+
   function eventToBoard(e) {
     const rect = els.board.getBoundingClientRect();
     const width = rect.width;
@@ -362,7 +408,8 @@
       node.innerHTML = layer.items
         .map((item) => {
           const selected = item.id === state.selectedId ? " selected" : "";
-          return `<div class="placed${selected}" data-id="${item.id}" style="left:${item.x * TILE}px;top:${item.y * TILE}px;width:${item.w * TILE}px;height:${item.h * TILE}px">${itemMarkup(item)}</div>`;
+          const inner = contentSize(item);
+          return `<div class="placed${selected}" data-id="${item.id}" style="left:${item.x * TILE}px;top:${item.y * TILE}px;width:${item.w * TILE}px;height:${item.h * TILE}px"><div class="placed-visual" style="width:${inner.w * TILE}px;height:${inner.h * TILE}px;transform:${visualTransform(item)}">${itemMarkup(item)}</div></div>`;
         })
         .join("");
     }
@@ -460,6 +507,16 @@
         <button type="button" id="send-back" class="flex-1 rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled}>Send back</button>
         <button type="button" id="bring-front" class="flex-1 rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled}>Bring front</button>
       </div>
+      <div class="mt-3">
+        <div class="mb-1 text-[10px] uppercase tracking-wider text-mist">Transform</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="flip-h" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]${item.flipX ? " on" : ""}" ${disabled} title="Flip horizontal">Flip H</button>
+          <button type="button" id="flip-v" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]${item.flipY ? " on" : ""}" ${disabled} title="Flip vertical">Flip V</button>
+          <button type="button" id="rot-ccw" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled} title="Rotate 90 degrees counterclockwise">Rotate left</button>
+          <button type="button" id="rot-cw" class="rounded-lg border border-ink-line bg-ink-raised px-2 py-1.5 text-[11px]" ${disabled} title="Rotate 90 degrees clockwise">Rotate right</button>
+        </div>
+        <div class="mt-1 text-[10px] text-mist">Rotation ${itemRotation(item)} deg</div>
+      </div>
       ${locked ? `<p class="mt-2 text-[10px] text-mist">Layer is hidden or locked. Unlock it to edit.</p>` : ""}
     `;
     const bind = (id, key, min, maxFn) => {
@@ -492,6 +549,14 @@
       sendToBack(item.id);
       renderItems();
     });
+    document.getElementById("flip-h")?.addEventListener("click", () => transformSelected((it) => {
+      it.flipX = !it.flipX;
+    }));
+    document.getElementById("flip-v")?.addEventListener("click", () => transformSelected((it) => {
+      it.flipY = !it.flipY;
+    }));
+    document.getElementById("rot-ccw")?.addEventListener("click", () => transformSelected((it) => rotateItem(it, -90)));
+    document.getElementById("rot-cw")?.addEventListener("click", () => transformSelected((it) => rotateItem(it, 90)));
   }
 
   function numField(label, id, value, disabled) {
@@ -544,6 +609,9 @@
       y,
       w: def.w,
       h: def.h,
+      flipX: false,
+      flipY: false,
+      rotation: 0,
     };
     clampItem(item, state.gridSize);
     checkpoint();
@@ -640,6 +708,13 @@
       node.style.top = `${item.y * TILE}px`;
       node.style.width = `${item.w * TILE}px`;
       node.style.height = `${item.h * TILE}px`;
+      const visual = node.querySelector(".placed-visual");
+      if (visual) {
+        const inner = contentSize(item);
+        visual.style.width = `${inner.w * TILE}px`;
+        visual.style.height = `${inner.h * TILE}px`;
+        visual.style.transform = visualTransform(item);
+      }
     }
     renderSelection();
     renderStatus();
@@ -735,6 +810,9 @@
           y: item.y,
           width: item.width ?? item.w,
           height: item.height ?? item.h,
+          flipX: Boolean(item.flipX),
+          flipY: Boolean(item.flipY),
+          rotation: itemRotation(item),
           sprite: spriteRef(item),
         })),
       })),
@@ -891,6 +969,22 @@
     ctx.restore();
   }
 
+  function beginItemTransform(ctx, item, unit) {
+    const x = item.x * unit;
+    const y = item.y * unit;
+    const w = item.w * unit;
+    const h = item.h * unit;
+    const inner = contentSize(item);
+    const iw = inner.w * unit;
+    const ih = inner.h * unit;
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate((itemRotation(item) * Math.PI) / 180);
+    ctx.scale(item.flipX ? -1 : 1, item.flipY ? -1 : 1);
+    ctx.translate(-iw / 2, -ih / 2);
+    return { w: iw, h: ih };
+  }
+
   async function exportPNG() {
     const unit = EXPORT_TILE;
     const canvas = document.createElement("canvas");
@@ -913,17 +1007,15 @@
       if (!layer.visible) continue;
       for (const item of layer.items) {
         const sprite = spriteById(item.spriteId);
-        const x = item.x * unit;
-        const y = item.y * unit;
-        const w = item.w * unit;
-        const h = item.h * unit;
         if (!sprite) continue;
+        const box = beginItemTransform(ctx, item, unit);
         if (sprite.kind === "image") {
           const img = await loadImage(sprite.src);
-          ctx.drawImage(img, x, y, w, h);
+          ctx.drawImage(img, 0, 0, box.w, box.h);
         } else {
-          drawShape(ctx, sprite, x, y, w, h);
+          drawShape(ctx, sprite, 0, 0, box.w, box.h);
         }
+        ctx.restore();
       }
     }
 

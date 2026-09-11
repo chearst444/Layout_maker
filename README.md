@@ -34,6 +34,7 @@ The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, tr
 ### Edit placed sprites
 - Click to select (when not in stamp mode). Drag to move (tile snap). Drag the honey-colored handles to resize across tiles.
 - Inspector fields edit X, Y, W, H in tiles. Send back / Bring front changes stacking inside the layer.
+- **Flip H**, **Flip V**, **Rotate left**, and **Rotate right** (90 degrees) transform the selection. 90 / 270 rotation swaps width and height and keeps the item on the grid when possible. Locked layers cannot be transformed. Transforms undo with the history stack.
 - **Delete** or **Backspace** removes the selection. The trash control in the inspector does the same.
 - **Escape** clears the selection and stamp tool.
 - Arrow keys nudge one tile. Toolbar **Undo** and **Redo** buttons share the same history as **Ctrl/Cmd+Z**, **Ctrl/Cmd+Shift+Z**, and **Ctrl/Cmd+Y**. Buttons disable when there is nothing to undo or redo.
@@ -43,14 +44,14 @@ The left sidebar has built-in placeholder shapes (rect, circle, rounded rect, tr
 ## Export
 
 ### PNG
-**Export PNG** rasterizes currently **visible** layers (hidden layers are skipped). Grid lines are included **only if the grid is currently shown**. If you hide the grid first, the PNG has no grid overlay. Export resolution is 32 pixels per tile.
+**Export PNG** rasterizes currently **visible** layers (hidden layers are skipped). Grid lines are included **only if the grid is currently shown**. If you hide the grid first, the PNG has no grid overlay. Image size is 32 pixels per tile (1024 x 1024 for 32 x 32, 1536 x 1536 for 48 x 48). Zoom does not change the image size.
 
 ### JSON
 **Export JSON** writes layer structure with tile coordinates:
 
 - `grid.cols` / `grid.rows`
 - each layer: `id`, `name`, `visible`, `locked`, `items`
-- each item: `id`, `x`, `y`, `width`, `height` (tiles), `sprite` (`id`, `type`, `source`)
+- each item: `id`, `x`, `y`, `width`, `height` (tiles), `flipX`, `flipY`, `rotation` (0, 90, 180, or 270), `sprite` (`id`, `type`, `source`)
 
 `type` is `shape` or `image`. For shapes, `source` is the shape key (for example `panel`). For uploads, `source` is the original filename. Image pixels are not embedded in the JSON.
 
